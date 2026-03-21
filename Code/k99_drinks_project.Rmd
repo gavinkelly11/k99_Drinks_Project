@@ -1,0 +1,1191 @@
+---
+title: "k99_drinks_project"
+author: "Gavin Kelly"
+date: "2025-07-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+```
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(psych)
+library(ggplot2)
+library(gghalves)
+library(ggdist)
+library(ggridges)
+library(forcats)
+library(reshape2)
+library(cowplot)
+library(ggpubr)
+library(lme4)
+library(sjstats)
+library(gt)
+library(webshot2)
+```
+
+## Loading Data
+
+```{r}
+# k99_shared_data <- read.csv("k99_shared_data.csv")
+```
+
+# Grouping Drinks
+
+
+We can rename the alc images.
+
+```{r}
+# liquor, beer, seltzer, wine
+k99_shared_data <- k99_shared_data %>%
+  mutate(
+    alc_image_name = case_when(
+      alc_image == "alc01.jpg" ~ "Beer 2",
+      alc_image == "alc02.jpg" ~ "Beer 1",
+      alc_image == "alc03.jpg" ~ "Beer 3",
+      alc_image == "alc04.jpg" ~ "Beer 4",
+      alc_image == "alc05.jpg" ~ "Beer 6",
+      alc_image == "alc06.jpg" ~ "Beer 5",
+      alc_image == "alc07.jpg" ~ "IPA 1",
+      alc_image == "alc08.jpg" ~ "IPA 2",
+      alc_image == "alc09.jpg" ~ "Seltzer 3",
+      alc_image == "alc10.jpg" ~ "Seltzer 4",
+      alc_image == "alc11.jpg" ~ "Seltzer 1",
+      alc_image == "alc12.jpg" ~ "Seltzer 2",
+      alc_image == "alc13.jpg" ~ "White Wine 2",
+      alc_image == "alc14.jpg" ~ "White Wine 1",
+      alc_image == "alc15.jpg" ~ "Red Wine 1",
+      alc_image == "alc16.jpg" ~ "Red Wine 2",
+      alc_image == "alc17.jpg" ~ "Sparkling Wine",
+      alc_image == "alc18.jpg" ~ "Vodka 1",
+      alc_image == "alc19.jpg" ~ "Vodka 3",
+      alc_image == "alc20.jpg" ~ "Vodka 2",
+      alc_image == "alc21.jpg" ~ "Tequila 1",
+      alc_image == "alc22.jpg" ~ "Tequila 3",
+      alc_image == "alc23.jpg" ~ "Tequila 2",
+      alc_image == "alc24.jpg" ~ "Gin 2",
+      alc_image == "alc25.jpg" ~ "Gin 1",
+      alc_image == "alc26.jpg" ~ "Bourbon",
+      alc_image == "alc27.jpg" ~ "Whiskey 1",
+      alc_image == "alc28.jpg" ~ "Whiskey 2",
+      alc_image == "alc29.jpg" ~ "Rum 2",
+      alc_image == "alc30.jpg" ~ "Rum 1"
+    )
+  )
+```
+
+And rename the soft drink images.
+
+```{r}
+#soda, diet soda, energy drink, juice, coffee
+k99_shared_data <- k99_shared_data %>%
+  mutate(
+    soft_image_name = case_when(
+      soft_image == "soft01.jpg" ~ "Soda 3", # "Coke"
+      soft_image == "soft02.jpg" ~ "Diet Soda 2", # "Diet Coke"
+      soft_image == "soft03.jpg" ~ "Diet Soda 1", # "Coke Zero"
+      soft_image == "soft04.jpg" ~ "Soda 6", # "Pepsi"
+      soft_image == "soft05.jpg" ~ "Diet Soda 4", # "Diet Pepsi"
+      soft_image == "soft06.jpg" ~ "Diet Soda 5", # "Pepsi Zero"
+      soft_image == "soft07.jpg" ~ "Soda 4", # "Dr Pepper"
+      soft_image == "soft08.jpg" ~ "Diet Soda 3", # "Diet Dr Pepper"
+      soft_image == "soft09.jpg" ~ "Soda 8", # "Sprite"
+      soft_image == "soft10.jpg" ~ "Soda 1", # "7up"
+      soft_image == "soft11.jpg" ~ "Soda 9", # "Sunkist"
+      soft_image == "soft12.jpg" ~ "Soda 5", # "Mtn Dew"
+      soft_image == "soft13.jpg" ~ "Soda 2", # "Canada Dry"
+      soft_image == "soft14.jpg" ~ "Soda 7", # "Root Beer"
+      soft_image == "soft15.jpg" ~ "Sweet Tea 1", # "Arizona (green)"
+      soft_image == "soft16.jpg" ~ "Sweet Tea 2", # "Arizona (red)"
+      soft_image == "soft17.jpg" ~ "Sweet Tea 3", # "Snapple"
+      soft_image == "soft18.jpg" ~ "Sports Drink 1", # "Gatorade (orange)"
+      soft_image == "soft19.jpg" ~ "Sports Drink 2", # "Gatorade (red)"
+      soft_image == "soft20.jpg" ~ "Energy Drink 5", # "Monster"
+      soft_image == "soft21.jpg" ~ "Energy Drink 3", # "Diet Monster"
+      soft_image == "soft22.jpg" ~ "Energy Drink 6", # "Redbull"
+      soft_image == "soft23.jpg" ~ "Energy Drink 4", # "Diet Redbull"
+      soft_image == "soft24.jpg" ~ "Energy Drink 1", # "Celsius (lime)"
+      soft_image == "soft25.jpg" ~ "Energy Drink 2", # "Celsius (orange)"
+      soft_image == "soft26.jpg" ~ "Smoothie 2", # "Strawberry Smoothie"
+      soft_image == "soft27.jpg" ~ "Smoothie 1", # "Mango Smoothie"
+      soft_image == "soft28.jpg" ~ "Orange Juice", # "Orange Juice"
+      soft_image == "soft29.jpg" ~ "Coffee 1", # "Coffee"
+      soft_image == "soft30.jpg" ~ "Coffee 2" # "Frappuccino"
+    )
+  )
+```
+
+We can specify which type of alcoholic drink is presented for each choice.
+
+```{r}
+liquor_drinks <- c("Vodka 1", "Vodka 2", "Vodka 3", "Tequila 1", "Tequila 2", 
+                   "Tequila 3", "Gin 1", "Gin 2", "Bourbon", "Whiskey 1",
+                   "Whiskey 2", "Rum 1", "Rum 2")
+beer_drinks <- c("Beer 1", "Beer 2", "Beer 3", "Beer 4", "Beer 5", "Beer 6",
+                 "IPA 1", "IPA 2")
+wine_drinks <- c("White Wine 1", "White Wine 2", "Red Wine 1", "Red Wine 2",
+                 "Sparkling Wine")
+seltzer_drinks <- c("Seltzer 1", "Seltzer 2", "Seltzer 3", "Seltzer 4")
+k99_shared_data$alc_image_type = "none"
+k99_shared_data <- k99_shared_data %>%
+  mutate(
+    alc_image_type = case_when(
+      alc_image_name %in% liquor_drinks ~ "Liquor",
+      alc_image_name %in% beer_drinks ~ "Beer",
+      alc_image_name %in% wine_drinks ~ "Wine",
+      alc_image_name %in% seltzer_drinks ~ "Seltzer"
+    )
+  )
+```
+
+We can specify which type of alcoholic drink is presented for each choice.
+
+```{r}
+sugary_drinks <- c("Soda 1", "Soda 2", "Soda 3", "Soda 4", "Soda 5", "Soda 6",
+                 "Soda 7", "Soda 8", "Soda 9", "Sweet Tea 1", "Sweet Tea 2",
+                 "Sweet Tea 3", "Sports Drink 1", "Sports Drink 2")
+diet_soda_drinks <- c("Diet Soda 1", "Diet Soda 2", "Diet Soda 3", "Diet Soda 4", 
+                      "Diet Soda 5")
+energy_drinks <- c("Energy Drink 1", "Energy Drink 2", "Energy Drink 3", 
+                   "Energy Drink 4", "Energy Drink 5", "Energy Drink 6")
+juice_drinks <- c("Orange Juice", "Smoothie 1", "Smoothie 2")
+coffee_drinks <- c("Coffee 1", "Coffee 2")
+k99_shared_data$soft_image_type = "none"
+k99_shared_data <- k99_shared_data %>%
+  mutate(
+    soft_image_type = case_when(
+      soft_image_name %in% sugary_drinks ~ "Soda/Sugary Drink",
+      soft_image_name %in% diet_soda_drinks ~ "Diet Soda",
+      soft_image_name %in% energy_drinks ~ "Energy Drink",
+      soft_image_name %in% juice_drinks ~ "Juice",
+      soft_image_name %in% coffee_drinks ~ "Coffee"
+    )
+  )
+```
+
+# Descriptives for choices for alcohol and soft
+
+We can look at the choices for alcohol and soft for each (type of) drink.
+
+```{r}
+# The SD is pretty high because there are some very low trial counts
+k99_shared_data %>%
+  ungroup() %>%
+  group_by(alc_image_type, subject, session) %>%
+  mutate(session_alc_response = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T))) %>%
+  group_by(alc_image_type, subject) %>%
+  summarise(person_alc_response = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+      sd_session_responses = sd(session_alc_response, na.rm = T)) %>%
+  group_by(alc_image_type) %>% #can also look by name
+  summarise(overall_alc_responses = mean(person_alc_response, na.rm = T),
+            sd_alc_responses = sd(person_alc_response, na.rm = T),
+            avg_sd_within_person = mean(sd_session_responses, na.rm = T)) %>%
+  arrange(overall_alc_responses)
+```
+
+
+```{r}
+# The SD is pretty high because there are some very low trial counts
+k99_shared_data %>%
+  ungroup() %>%
+  group_by(soft_image_type, subject, session) %>%
+  mutate(session_soft_response = sum(response == "soft", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T))) %>%
+  group_by(soft_image_type, subject) %>% #can also look by name
+  mutate(person_soft_response = sum(response == "soft", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+      sd_session_responses = sd(session_soft_response, na.rm = T)) %>%
+  group_by(soft_image_type) %>%
+  summarise(overall_soft_responses = mean(person_soft_response, na.rm = T),
+      sd_overall_responses = sd(person_soft_response, na.rm = T),
+      avg_sd_within_person = mean(sd_session_responses, na.rm = T)) %>%
+  arrange(overall_soft_responses)
+#show example for different types of people, one plot for each person
+#could plot from day to day, time series plot
+#one is consistent, another all over, another always below 50
+```
+
+# prop choices for each drink type by value function
+
+```{r}
+k99_shared_data %>% 
+  group_by(alc_image_type) %>%
+  summarise(prop_choices = sum(response == "alc", na.rm = T)/sum(!is.na(response)))
+```
+```{r}
+#check when val fn == 0
+k99_shared_data %>% 
+  filter(value_function == 0) %>% group_by(alc_image_type) %>%
+  summarise(prop_choices = sum(response == "alc", na.rm = T)/sum(!is.na(response)))
+```
+```{r}
+k99_shared_data %>% 
+  group_by(soft_image_type) %>%
+  summarise(prop_choices = sum(response == "soft", na.rm = T)/sum(!is.na(response)))
+```
+```{r}
+#check when val fn == 0
+k99_shared_data %>% 
+  filter(value_function == 0) %>% group_by(soft_image_type) %>%
+  summarise(prop_choices = sum(response == "soft", na.rm = T)/sum(!is.na(response)))
+```
+# time lag drinking behavior
+
+```{r}
+#check when val fn == 0
+k99_shared_data %>% 
+  filter(value_function == 0) %>% group_by(alc_image_type) %>%
+  summarise(prop_choices = sum(response == "alc", na.rm = T)/sum(!is.na(response)))
+```
+
+```{r}
+# first we need to create a new df
+ema_lead_grid <- expand.grid(
+  subject = 1:250,
+  day_number = 1:14
+)
+#add day num to merged with days since baseline
+k99_lead_data <- k99_shared_data %>%
+  filter(!is.na(response)) %>%
+  group_by(subject, session) %>%
+  mutate(prop_soda_responses = sum(response == "soft" & soft_image_type == "Soda/Sugary Drink") /
+           sum(soft_image_type == "Soda/Sugary Drink"),
+         prop_diet_soda_responses = sum(response == "soft" & soft_image_type == "Diet Soda") /
+           sum(soft_image_type == "Diet Soda"),
+         prop_juice_responses = sum(response == "soft" & soft_image_type == "Juice") /
+           sum(soft_image_type == "Juice"),
+         prop_energy_responses = sum(response == "soft" & soft_image_type == "Energy Drink") /
+           sum(soft_image_type == "Energy Drink"),
+         prop_coffee_responses = sum(response == "soft" & soft_image_type == "Coffee") /
+           sum(soft_image_type == "Coffee"),
+         
+         prop_beer_responses = sum(response == "alc" & alc_image_type == "Beer") /
+           sum(alc_image_type == "Beer"),
+         prop_liquor_responses = sum(response == "alc" & alc_image_type == "Liquor") /
+           sum(alc_image_type == "Liquor"),
+         prop_seltzer_responses = sum(response == "alc" & alc_image_type == "Seltzer") /
+           sum(alc_image_type == "Seltzer"),
+         prop_wine_responses = sum(response == "alc" & alc_image_type == "Wine") /
+           sum(alc_image_type == "Wine"),
+         
+         prop_preference_reversals = (sum(response == "alc" & value_function < 0, na.rm = T) + 
+                                      sum(response == "soft" & value_function > 0, na.rm = T))/
+                                      sum(!is.na(response))) %>%
+  group_by(subject) %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"),
+         baseline_date = as.Date(end_date_string, format = "%m/%d/%Y"),
+         day_number = as.numeric(difftime(date, baseline_date, units = "days")),
+         hour = hour(hms(time))) %>%
+  mutate(
+    day_number = ifelse(day_number >= 1 & day_number <= 14, day_number, NA)
+  )
+```
+
+```{r}
+k99_lead_data <- k99_lead_data[c("subject", "session", "day_number", "alc_yday",
+                                 "alc_intend", "prop_alc_responses", 
+                     "prop_soda_responses", "prop_diet_soda_responses",
+                     "prop_juice_responses", "prop_energy_responses",
+                     "prop_coffee_responses", "prop_beer_responses",
+                     "prop_liquor_responses", "prop_seltzer_responses",
+                     "prop_wine_responses", "time_of_day",
+                     "audit_score", "age", "day_of_week",
+                     "thirst_state", "hunger_state", "tired_state",
+                     "bored_state", "alc_craving", "soft_craving",
+                     "social_context_overall", "location", "alc_cue",
+                     "responsibility", "hour", "prop_preference_reversals")]
+
+ema_lead <- ema_lead_grid %>%
+  left_join(k99_lead_data, by = c("subject", "day_number"))
+
+ema_lead <- ema_lead %>%
+  group_by(subject, session, day_number) %>%
+  slice(1) %>%
+  ungroup() %>%
+  arrange(subject, day_number) %>%
+  ungroup()
+```
+
+```{r}
+#for some reason when they are all NA, min returns Inf, so i have to fix that
+ema_lead <- ema_lead %>%
+  group_by(subject, day_number) %>%
+  mutate(alc_yday = min(alc_yday, na.rm = T)) %>%
+  mutate(alc_yday = case_when(
+    alc_yday == "Inf" ~ NA,
+    TRUE ~ alc_yday
+  ))
+```
+
+```{r}
+alc_yday_shifted <- ema_lead %>%
+  group_by(subject, day_number) %>%
+  summarise(alc_yday_day = first(alc_yday), .groups = "drop") %>%
+  arrange(subject, day_number) %>%
+  group_by(subject) %>%
+  mutate(alc_consumed_today = lead(alc_yday_day))  # shift back one day
+
+# Join this shifted value back to the original session-level data
+ema_lead <- ema_lead %>%
+  left_join(alc_yday_shifted %>% select(subject, day_number, alc_consumed_today),
+            by = c("subject", "day_number"))
+```
+
+# Descriptives for drinking behavior
+
+```{r}
+ema_lead %>% ungroup() %>% summarise(prop = sum(alc_consumed_today > 0, na.rm = T) / sum(!is.na(alc_consumed_today))) # prop study days drinking
+ema_lead %>% ungroup() %>% filter(alc_consumed_today > 0) %>%
+  summarise(avg_num_drinks = mean(alc_consumed_today, na.rm = T)) # avg num drinks
+```
+
+
+```{r}
+cor(ema_lead$alc_intend, ema_lead$prop_alc_responses, use = "complete.obs")
+cor(ema_lead$alc_consumed_today, ema_lead$prop_alc_responses, use = "complete.obs")
+```
+
+```{r}
+# look at difference in correlations between afternoon and evening
+ema_lead %>%
+  filter(!is.na(time_of_day)) %>%
+  group_by(time_of_day) %>%
+  summarise(
+    cor_consumed_prop = cor(alc_consumed_today, prop_alc_responses, use = "complete.obs"),
+    cor_intend_prop = cor(alc_intend, prop_alc_responses, use = "complete.obs")
+  )
+```
+
+```{r}
+cor_df <- ema_lead %>%
+  group_by(subject) %>%
+  mutate(
+    mean_prop_alc_responses = mean(prop_alc_responses, na.rm = T),
+    mean_alc_intend = mean(alc_intend, na.rm = T), 
+    mean_alc_consumed = mean(alc_consumed_today, na.rm = T)
+  ) %>%
+  slice(1)
+```
+
+```{r}
+cor_df <- cor_df[c("mean_prop_alc_responses", "mean_alc_intend", "mean_alc_consumed",
+                   "audit_score", "age")]
+cor_matrix <- cor_df %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  round(., 2)
+cor_matrix
+```
+
+```{r}
+cor_df2 <- ema_lead[c("prop_alc_responses", "alc_intend", "alc_consumed_today",
+                      "alc_craving", "thirst_state", "tired_state",
+                   "hunger_state", "bored_state")]
+cor_matrix2 <- cor_df2 %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  round(., 2)
+cor_matrix2
+```
+
+```{r}
+cor_df3 <- ema_lead %>%
+  group_by(subject) %>%
+  mutate(
+    mean_prop_soda_responses = mean(prop_soda_responses, na.rm = T),
+    mean_prop_diet_soda_responses = mean(prop_diet_soda_responses, na.rm = T),
+    mean_prop_juice_responses = mean(prop_juice_responses, na.rm = T),
+    mean_prop_energy_responses = mean(prop_energy_responses, na.rm = T),
+    mean_prop_coffee_responses = mean(prop_coffee_responses, na.rm = T),
+    
+    mean_prop_beer_responses = mean(prop_beer_responses, na.rm = T),
+    mean_prop_liquor_responses = mean(prop_liquor_responses, na.rm = T),
+    mean_prop_seltzer_responses = mean(prop_seltzer_responses, na.rm = T),
+    mean_prop_wine_responses = mean(prop_wine_responses, na.rm = T),
+    
+    mean_alc_intend = mean(alc_intend, na.rm = T), 
+    mean_alc_consumed = mean(alc_consumed_today, na.rm = T)
+  ) %>%
+  slice(1)
+```
+
+```{r}
+cor_df3 <- cor_df3[c("mean_prop_soda_responses", "mean_prop_diet_soda_responses",
+                     "mean_prop_juice_responses", "mean_prop_energy_responses",
+                     "mean_prop_coffee_responses", "mean_prop_beer_responses",
+                     "mean_prop_liquor_responses", "mean_prop_seltzer_responses",
+                     "mean_prop_wine_responses", "mean_alc_intend", "mean_alc_consumed",
+                   "audit_score", "age")]
+cor_matrix3 <- cor_df3 %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  round(., 2)
+cor_matrix3
+```
+
+```{r}
+cor_df4 <- ema_lead[c("prop_soda_responses", "prop_diet_soda_responses",
+                     "prop_juice_responses", "prop_energy_responses",
+                     "prop_coffee_responses", "prop_beer_responses",
+                     "prop_liquor_responses", "prop_seltzer_responses",
+                     "prop_wine_responses", "alc_intend",
+                     "alc_consumed_today", "alc_craving", "soft_craving",
+                     "thirst_state")]
+cor_matrix4 <- cor_df4 %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  round(., 2)
+cor_matrix4
+```
+
+# prop choices by drink pairings
+
+```{r}
+#calculate the study wide prop choices for drink type pairings.
+pairs_dat <- k99_shared_data %>%
+  group_by(alc_image_type, soft_image_type) %>%
+  mutate(prop_alc_choices = sum(response == "alc", na.rm = T) / sum(!is.na(response))) %>%
+  slice(1)
+```
+
+# plot choice pairings of drink types
+
+```{r}
+ggplot(pairs_dat, aes(x = soft_image_type, y = prop_alc_choices, fill = alc_image_type, 
+        color = alc_image_type, group = alc_image_type)) +
+  stat_summary(aes(group = alc_image_type), fun = mean, geom = "point", size = 6) +
+  stat_summary(aes(group = alc_image_type), fun = mean, geom = "line", size = 3) +
+  scale_color_manual(values = alc_colors) +
+  labs(x = "Drink Type", y = "Proportion of Choices", title = "") +
+  theme_cowplot() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+
+# plot number of observations by value function
+
+```{r}
+#descriptive for num obs, avg rating difference
+k99_shared_data %>% group_by(alc_image_type) %>% 
+  summarise(n = sum(!is.na(response)), avg_rating_dif = mean(value_function, na.rm = T))
+```
+
+```{r}
+alc_colors <- c("Beer" = "#003049", "Wine" = "#f77f00", "Seltzer" = "#fcbf49", "Liquor" = "#d62828")
+
+prop_obs_dat <- k99_shared_data %>%
+  ungroup() %>%
+  group_by(alc_image_type) %>%
+  mutate(total_n = sum(!is.na(response))) %>%
+  ungroup() %>%
+  group_by(alc_image_type, value_function) %>%
+  mutate(prop_obs_val = sum(!is.na(response))/total_n) %>%
+  slice(1)
+
+prop_obs_dat$alc_image_type <- factor(prop_obs_dat$alc_image_type, 
+                                   levels = c("Liquor", "Beer", "Wine", "Seltzer"))
+
+prop_obs_plot <- ggplot(prop_obs_dat, aes(x = value_function, y = prop_obs_val, 
+                   color = alc_image_type, group = alc_image_type)) +
+    geom_point(size = 7) +
+    geom_line(size = 3) +
+    theme_cowplot() +
+    scale_fill_manual(values = alc_colors) +
+    scale_color_manual(values = alc_colors) +
+    theme(
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+    scale_x_continuous(breaks = seq(-3, 3, by = 1))+ 
+  labs(  title = "", x = "Value Function", y = "Proportion of Observations",
+  color = "Drink Type")
+prop_obs_plot
+```
+
+```{r}
+# ggsave("prop_obs_plot.jpeg", prop_obs_plot, device = "jpeg", width = 7, height = 5, dpi = 300)
+```
+
+# avg increase in choices by value fn
+
+```{r}
+k99_shared_data %>%
+  group_by(alc_image_type, value_function) %>%
+  summarise(choices = sum(response == "alc", na.rm = T)/
+                  sum(!is.na(response))) %>%
+  group_by(alc_image_type) %>%
+  summarise(avg_increase = (max(choices) - min(choices)) / 6)
+```
+
+
+# create table for choices for drinks by value function
+
+```{r}
+k99_long_data <- k99_shared_data %>%
+  group_by(value_function, alc_image_type) %>%
+  mutate(avg_responses = sum(response == "alc", na.rm = T)/
+                              sum(!is.na(response))) %>%
+  slice(1) %>%
+  select(avg_responses, alc_image_type, value_function)
+k99_long_data$alc_image_type <- factor(k99_long_data$alc_image_type,
+  levels = c("Liquor", "Wine", "Beer", "Seltzer"))
+k99_long_data <- rename(k99_long_data, "Drink Type" = alc_image_type)
+k99_long_data <- rename(k99_long_data, "Rating Difference" = value_function)
+```
+
+```{r}
+# Using the same my_dataframe
+drink_val_tab <- xtabs(avg_responses ~ `Drink Type` + `Rating Difference`, data = k99_long_data)
+drink_val_tab_df <- as.data.frame.matrix(drink_val_tab)
+drink_val_tab_df <- tibble::rownames_to_column(drink_val_tab_df, var = "Drink Type")
+```
+
+```{r}
+final_drink_val_tab <- drink_val_tab_df %>%
+  gt() %>%
+  tab_header(title = "Average Responses by Drink Type and Rating Difference") %>%
+  fmt_number(columns = everything(), decimals = 2) %>%
+  tab_options(table.font.size = 14)
+```
+
+```{r}
+gtsave(final_drink_val_tab, "drink_val_table.png", zoom = 2)
+```
+
+
+```{r}
+k99_long_soft_data <- k99_shared_data %>%
+  group_by(value_function, soft_image_type) %>%
+  mutate(avg_responses = sum(response == "soft", na.rm = T)/
+                              sum(!is.na(response))) %>%
+  slice(1) %>%
+  select(avg_responses, soft_image_type, value_function)
+
+k99_long_soft_data$soft_image_type <- factor(k99_long_soft_data$soft_image_type,
+  levels = c("Coffee", "Energy Drink", "Juice", "Diet Soda", "Soda/Sugary Drink"))
+
+k99_long_soft_data <- rename(k99_long_soft_data, "Drink Type" = soft_image_type)
+k99_long_soft_data <- rename(k99_long_soft_data, "Rating Difference" = value_function)
+```
+
+# function for plotting prop choices by value function
+
+```{r}
+plot_drink_values <- function(data, colors){
+  ggplot(data, aes(x = `Rating Difference`, y = avg_responses, 
+                   color = `Drink Type`, group = `Drink Type`)) +
+    geom_line(size = 2.5) +
+    geom_point(size = 5) +
+    theme_cowplot() +
+    scale_fill_manual(values = colors) +
+    scale_color_manual(values = colors) +
+    theme(
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+    scale_x_continuous(breaks = seq(-3, 3, by = 1)) +
+    ylim(0, 1)
+}
+```
+
+# plot prop choices by value function
+
+
+```{r}
+alc_drinks_value_plot <- plot_drink_values(
+  data = k99_long_data,
+  colors = alc_colors
+) + labs(
+  title = "",
+  x = "Value Function",
+  y = "Choices for Alcohol (%)",
+  color = "Drink Type"
+)
+
+alc_drinks_value_plot
+```
+
+
+
+
+
+```{r}
+soft_colors <- c("Soda/Sugary Drink" = "#2364aa", "Diet Soda" = "#3da5d9", "Coffee" = "#b298dc",
+                 "Energy Drink" = "#662e9b", "Juice" = "#8f2d56")
+soft_drinks_value_plot <- plot_drink_values(
+  data = k99_long_soft_data,
+  colors = soft_colors
+) + labs(
+  title = "",
+  x = "Value Function",
+  y = "Choices for Soft Drinks (%)",
+  color = "Drink Type"
+)
+
+soft_drinks_value_plot
+```
+
+```{r}
+drinks_value_plot <- ggpubr::ggarrange(
+  alc_drinks_value_plot, soft_drinks_value_plot,
+  ncol = 2,
+  nrow = 1,
+  widths = c(2.62, 3),
+  labels = c("A", "B"),
+  font.label = list(size = 18, face = "bold"), # Optional formatting
+  label.x = 0,
+  label.y = 1
+)
+ggsave("drinks_value_plot.jpeg", drinks_value_plot, device = "jpeg", width = 12, height = 4, dpi = 300)
+```
+
+
+
+# calculate ICC
+
+```{r}
+model_icc <- function(dat, formula){
+  lmer(formula, data = dat) }
+performance::icc(model_icc(ema_lead, prop_alc_responses ~ 1 + (1|subject)))
+performance::icc(model_icc(ema_lead, prop_liquor_responses ~ 1 + (1|subject)))
+performance::icc(model_icc(ema_lead, prop_wine_responses ~ 1 + (1|subject)))
+performance::icc(model_icc(ema_lead, prop_beer_responses ~ 1 + (1|subject)))
+performance::icc(model_icc(ema_lead, prop_seltzer_responses ~ 1 + (1|subject)))
+```
+
+# calculate overall SD and for drink types
+
+```{r}
+ema_lead %>%
+  group_by(subject) %>%
+  summarise(sd_choices = sd(prop_alc_responses, na.rm = T)) %>%
+  ungroup() %>%
+  summarise(avg_sd = mean(sd_choices, na.rm = T),
+            min_sd = min(sd_choices, na.rm = T),
+            max_sd = max(sd_choices, na.rm = T),
+            sd_sd = sd(sd_choices, na.rm = T))
+```
+
+```{r}
+ema_long %>%
+  group_by(subject, drink_type) %>%
+  summarise(sd_choices = sd(prop_drink_type_responses, na.rm = T)) %>%
+  group_by(drink_type) %>%
+  summarise(avg_sd = mean(sd_choices, na.rm = T),
+            min_sd = min(sd_choices, na.rm = T),
+            max_sd = max(sd_choices, na.rm = T),
+            sd_sd = sd(sd_choices, na.rm = T))
+```
+
+# Day Number Within Person Variability Plot
+
+```{r}
+clr = "#5c677d"
+day_num_plot <- ggplot(ema_lead, aes(x = day_number, y = prop_alc_responses, 
+                                    fill = clr, color = clr)) +
+  geom_point(size = 2, alpha = 0.1, width = .35, height = .25) +
+  geom_line(aes(group = subject), alpha = 0.1) +
+  stat_summary( fun = mean, geom = "point", size = 6, color = "black") +
+  stat_summary( fun = mean, geom = "line", size = 3, color = "black") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.5, color = "black") +
+  # geom_point(aes(x = day_number, y = prop_alc_responses), size = 7, color = "#001233") +
+  # geom_line(aes(x = day_number, y = prop_alc_responses), size = 3, color = "#001233") +
+  theme_cowplot() +
+  scale_fill_manual(values = clr) +
+  scale_color_manual(values = clr) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_x_continuous(breaks = seq(1, 14, by = 1)) +
+  scale_y_continuous(breaks = seq(0, 1, by = .25)) +
+  coord_cartesian(xlim = c(1, 14), ylim = c(0, 1)) +
+  labs(title = "", x = "Day Number", y = "Choices for Alcohol (%)")
+day_num_plot
+```
+
+# Preference Reversal Plot
+
+```{r}
+clr = "#5c677d"
+pref_rev_plot <- ggplot(ema_lead, aes(x = day_number, y = prop_preference_reversals, 
+                                    fill = clr, color = clr)) +
+  geom_point(size = 2, alpha = 0.1, width = .35, height = .25) +
+  geom_line(aes(group = subject), alpha = 0.1) +
+  stat_summary( fun = mean, geom = "point", size = 6, color = "black") +
+  stat_summary( fun = mean, geom = "line", size = 3, color = "black") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.5, color = "black") +
+  # geom_point(aes(x = day_number, y = prop_alc_responses), size = 7, color = "#001233") +
+  # geom_line(aes(x = day_number, y = prop_alc_responses), size = 3, color = "#001233") +
+  theme_cowplot() +
+  scale_fill_manual(values = clr) +
+  scale_color_manual(values = clr) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_x_continuous(breaks = seq(1, 14, by = 1)) +
+  scale_y_continuous(breaks = seq(0, 1, by = .25)) +
+  coord_cartesian(xlim = c(1, 14), ylim = c(0, 1)) +
+  labs(title = "", x = "Day Number", y = "Preference Reversals (%)")
+pref_rev_plot
+```
+
+```{r}
+ggsave("pref_rev_plot.jpeg", pref_rev_plot, device = "jpeg", width = 9,
+       height = 5, dpi = 300)
+```
+
+# Day of Week Choices for Alcohol Plot
+
+```{r}
+highlight_subjects <- c(50, 14, 10, 202)  # replace with actual IDs
+
+# Add a new column to mark which subject to highlight
+ema_lead$highlight <- ifelse(ema_lead$subject %in% highlight_subjects, 
+                              as.character(ema_lead$subject), "Other")
+
+# Convert highlight to a factor so colors are consistent
+ema_lead$highlight <- factor(ema_lead$highlight, levels = c("Other", highlight_subjects))
+
+# Define colors for each
+highlight_colors <- c("Other" = "#a67ba0", 
+                      "50" = "orange", 
+                      "14" = "#0072B2", 
+                      "10" = "#009E73",
+                      "202" = "red")
+ema_days <- ema_lead
+ema_days$subject <- as.factor(ema_days$subject)
+```
+
+
+```{r}
+day_of_week_plot <- ggplot(subset(ema_lead, !is.na(day_of_week)), 
+       aes(x = day_of_week, y = prop_alc_responses, group = subject)) +
+ geom_line(color = "#a67ba0", alpha = 0.1) +
+  geom_point(color = "#a67ba0", size = 1.5, alpha = 0.3) +
+  
+  # Mean line across all subjects
+  stat_summary(aes(group = 1), fun = mean, geom = "point", size = 6, color = "#800870") +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", size = 3, color = "#800870") +
+
+  scale_color_manual(values = highlight_colors) +
+  theme_cowplot() +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "right",
+    axis.text.x = element_text(size = 16),
+    axis.title.x = element_text(size = 18),
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 18)
+  ) +
+  scale_y_continuous(breaks = seq(0, 1, by = .25)) +
+  labs(x = "Day of Week", y = "Choices for Alcohol (%)")
+
+day_of_week_plot
+```
+
+```{r}
+ggsave("day_of_week_plot.jpeg", day_of_week_plot, device = "jpeg", width = 7,
+       height = 4, dpi = 300)
+```
+
+# drinking behavior weekly statistics
+
+```{r}
+ema_week <- ema_lead %>%
+  mutate(weekend = case_when(
+    day_of_week %in% c("Fri", "Sat") ~ "Weekend",
+    !is.na(day_of_week) ~ "Weekday"
+  ))
+ema_week %>%
+  filter(!is.na(alc_consumed_today) & !is.na(prop_alc_responses)) %>%
+  group_by(weekend) %>%
+  summarise(consumed_mean = mean(alc_consumed_today, na.rm = T),
+            consumed_sd = sd(alc_consumed_today, na.rm = T),
+            consumed_min = min(alc_consumed_today, na.rm = T),
+            consumed_max = max(alc_consumed_today, na.rm = T),
+            corsd = cor(alc_consumed_today, prop_alc_responses),
+            mean_choices = mean(prop_alc_responses, na.rm = T),
+            sd_choices = sd(prop_alc_responses, na.rm = T),
+            min_choices = min(prop_alc_responses, na.rm = T),
+            max_choices = max(prop_alc_responses, na.rm = T))
+```
+
+
+# Hourly Choices for Alcohol Plot
+
+```{r}
+clr = "#a67ba0"
+hours_plot <- ggplot(subset(ema_lead, hour >= 15 & hour < 23), aes(x = hour, y = prop_alc_responses, 
+                                    fill = clr, color = clr)) +
+  geom_point(size = 2, alpha = 0.1, width = .35, height = .25) +
+  geom_line(aes(group = subject), alpha = 0.1) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", size = 6, color = "#800870") +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", size = 3, color = "#800870") +
+  theme_cowplot() +
+  scale_fill_manual(values = clr) +
+  scale_color_manual(values = clr) +
+  # facet_wrap(~ day_of_week, ncol = 1) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_y_continuous(breaks = seq(0, 1, by = .25)) +
+  labs(title = "", x = "Hour", y = "Choices for Alcohol (%)")
+hours_plot
+```
+
+```{r}
+# ggsave("hours_plot.jpeg", hours_plot, device = "jpeg", width = 7,
+#        height = 4, dpi = 300)
+```
+
+
+# Day of Week Choices for Alcohol type Plot
+
+
+```{r}
+ema_long$day_of_week <- factor(ema_long$day_of_week,
+  levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))
+day_of_week_type_plot <- ggplot(subset(ema_long, !is.na(day_of_week)), 
+                                  aes(x = day_of_week, y = prop_drink_type_responses, 
+                                    color = drink_type), group = drink_type) +
+  geom_jitter(aes(group = drink_type, color = drink_type), alpha = .1) +
+  stat_summary(aes(group = drink_type, color = drink_type), fun = mean, geom = "point", size = 6) +
+  stat_summary(aes(group = drink_type, color = drink_type), fun = mean, geom = "line", size = 3) +
+  scale_color_manual(values = alc_colors,name = "Drink Type")+
+  theme_cowplot() +
+    theme(
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_y_continuous(breaks = seq(0, 1, by = .25)) +
+  labs(title = "", x = "Day of Week", y = "Choices for Alcohol (%)")
+day_of_week_type_plot
+```
+
+```{r}
+# ggsave("day_of_week_type_plot.jpeg", day_of_week_type_plot, device = "jpeg", width = 7,
+#        height = 4, dpi = 300)
+```
+
+# Hourly Choices for Alcohol type Plot
+
+
+```{r}
+hourly_type_plot <- ggplot(subset(ema_long, hour >= 15 & hour < 23), 
+                                  aes(x = hour, y = prop_drink_type_responses, 
+                                      color = drink_type), group = drink_type) +
+  geom_jitter(alpha = .1) +
+  stat_summary(aes(group = drink_type), fun = mean, geom = "point", size = 6) +
+  stat_summary(aes(group = drink_type), fun = mean, geom = "line", size = 3) +
+  stat_summary(aes(group = drink_type), fun.data = mean_se, geom = "errorbar", 
+               width = 0.2, color = "black") +
+  scale_color_manual(values = alc_colors,name = "Drink Type")+
+  theme_cowplot() +
+    theme(
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_y_continuous(breaks = seq(0, 1, by = .25)) +
+  labs(title = "", x = "Hour", y = "Choices for Alcohol (%)")
+hourly_type_plot
+```
+
+```{r}
+# ggsave("hourly_type_plot.jpeg", hourly_type_plot, device = "jpeg", width = 7,
+#        height = 4, dpi = 300)
+```
+
+# Overall choices for alc by location
+
+```{r}
+plot_boxplot <- function(dat, xvar) {
+  n_levels <- length(unique(pull(dat, {{xvar}})))
+  purples <- colorRampPalette(c("#800870", "#b11ad6"))(n_levels)
+  
+  ggplot(dat,
+  aes(x = {{xvar}}, y = prop_alc_responses, color = {{xvar}})) +
+  geom_jitter(alpha = .05) + 
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.15, color = "black") +
+    scale_color_manual(values = purples, guide = "none") + 
+  # geom_boxplot(outlier.shape = NA, alpha = 0.8, color = "black") +
+  # scale_fill_manual(values = alc_colors, name = "Drink Type") +
+  theme_cowplot() +
+  theme(
+    strip.text = element_text(size = 21, face = "bold"),
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 21),
+    axis.title.x = element_text(size = 21))
+}
+loc_boxplot <- (plot_boxplot(subset(ema_long, !is.na(location)), location)) +
+  labs(title = "",x = "Location",y = "Choices for Alcohol (%)")
+loc_boxplot
+```
+
+# ICC for alc by location
+
+```{r}
+locations <- c("bar_club", "home", "other", "outdoors", "restaurant_cafe",
+               "school_work", "someone_elses_home")
+for (place in locations) {
+  print(place)
+  print(performance::icc(model_icc(subset(ema_lead, location == place), 
+                                    prop_alc_responses ~ 1 + (1|subject))))
+  cat('\n')
+}
+```
+
+
+# Overall choices for alc by social context
+
+```{r}
+soc_boxplot <- (plot_boxplot(subset(ema_long, !is.na(social_context_overall)), 
+                             social_context_overall)) +
+  labs(title = "",x = "Social Context",y = "Choices for Alcohol (%)")
+soc_boxplot
+```
+
+```{r}
+contexts_overall_plot <- ggpubr::ggarrange(
+  loc_boxplot, soc_boxplot,
+  ncol = 2,
+  nrow = 1,
+  widths = c(1, 1),
+  labels = c("A", "B"),
+  font.label = list(size = 18, face = "bold"), # Optional formatting
+  label.x = 0,
+  label.y = 1
+)
+ggsave("contexts_overall_plot.jpeg", contexts_overall_plot, device = "jpeg", width = 16, height = 5, dpi = 300)
+```
+
+# Choices for alc type by location
+
+```{r}
+ema_long$drink_type <- factor(
+  ema_long$drink_type,
+  levels = c("prop_liquor_responses", "prop_wine_responses", 
+             "prop_beer_responses", "prop_seltzer_responses"),
+  labels = c("Liquor", "Wine", "Beer", "Seltzer"))
+
+ema_long$location <- factor(ema_long$location,
+  levels = c("home", "school_work", "someone_elses_home", "outdoors", "restaurant_cafe",
+             "bar_club", "other"),
+  labels = c("Home", "School/Work", "Other's Home", "Outdoors", "Restaurant",
+             "Bar/Club", "Other"))
+```
+
+```{r}
+loc_type_boxplot <- ggplot(ema_long %>% filter(!is.na(location)),
+  aes(x = drink_type, y = prop_drink_type_responses, fill = drink_type)) +
+  geom_jitter(aes(color = drink_type), alpha = .1) + 
+  geom_boxplot(aes(fill = drink_type), outlier.shape = NA, alpha = 0.2, color = "black") +
+  # stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.5, color = "black") +
+  facet_wrap(~location, nrow = 1, scales = "free_x") +
+  scale_color_manual(values = alc_colors, name = "Drink Type") +
+  scale_fill_manual(values = alc_colors, name = "Drink Type") +
+  theme_cowplot() +
+    guides(fill = guide_legend(override.aes = list(alpha = 1))) +
+  labs(title = "",x = "Location",y = "Choices for Alcohol (%)") +
+  theme(
+    legend.position = "right",
+    strip.text = element_text(size = 21, face = "bold"),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 21),
+    axis.title.x = element_text(size = 21))
+
+loc_type_boxplot
+```
+
+```{r}
+ggsave("loc_type_boxplot.jpeg", loc_type_boxplot, device = "jpeg", width = 16, height = 5, dpi = 300)
+```
+
+# location descriptive statistics
+
+```{r}
+ema_lead %>%
+  filter(!is.na(prop_alc_responses)) %>%
+  group_by(location) %>%
+  summarise(mean_choices = mean(prop_alc_responses, na.rm = T),
+            sd_choices = sd(prop_alc_responses, na.rm = T),
+            min_choices = min(prop_alc_responses, na.rm = T),
+            max_choices = max(prop_alc_responses, na.rm = T))
+```
+
+# Correlations between choices for drink types and drinking behavior
+
+```{r}
+ema_lead %>%
+  ungroup() %>%
+  summarise(
+     liquor_intend_cor = cor(ema_lead$alc_intend, ema_lead$prop_liquor_responses, 
+                      use = "complete.obs"),
+     liquor_consume_cor = cor(ema_lead$alc_consumed_today, ema_lead$prop_liquor_responses, 
+                       use = "complete.obs"),
+     
+     wine_intend_cor = cor(ema_lead$alc_intend, ema_lead$prop_wine_responses, 
+                      use = "complete.obs"),
+     wine_consume_cor = cor(ema_lead$alc_consumed_today, ema_lead$prop_wine_responses, 
+                       use = "complete.obs"),
+     
+     beer_intend_cor = cor(ema_lead$alc_intend, ema_lead$prop_beer_responses, 
+                      use = "complete.obs"),
+     beer_consume_cor = cor(ema_lead$alc_consumed_today, ema_lead$prop_beer_responses, 
+                       use = "complete.obs"),
+     
+     seltzer_intend_cor = cor(ema_lead$alc_intend, ema_lead$prop_seltzer_responses, 
+                      use = "complete.obs"),
+     seltzer_consume_cor = cor(ema_lead$alc_consumed_today, ema_lead$prop_seltzer_responses, 
+                       use = "complete.obs")
+  )
+```
+
+
+# Drink Type by Social Context Boxplot
+
+```{r}
+ema_long$social_context_overall <- factor(ema_long$social_context_overall,
+  levels = c("alone", "romantic_partner", "family", "friend_roommate", "coworker_classmate",
+             "stranger", "multiple", "other"),
+  labels = c("Alone", "Romantic Partner", "Family", "Friend/Roommate", "Coworker/Classmate",
+             "Stranger","Multiple", "Other"))
+```
+
+
+```{r}
+soc_type_boxplot <- ggplot(ema_long %>% filter(!is.na(social_context_overall) &
+                                                 social_context_overall != "Other"),
+  aes(x = drink_type, y = prop_drink_type_responses, fill = drink_type)) +
+  geom_jitter(aes(color = drink_type), alpha = .1) + 
+  geom_boxplot(aes(fill = drink_type), outlier.shape = NA, alpha = 0.2, color = "black") +
+  # stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.5, color = "black") +
+  facet_wrap(~social_context_overall, nrow = 1, scales = "free_x") +
+  scale_color_manual(values = alc_colors, name = "Drink Type") +
+  scale_fill_manual(values = alc_colors, name = "Drink Type") +
+  theme_cowplot() +
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) +
+  labs(title = "",x = "Social Context",y = "Choices for Alcohol (%)") +
+  theme(
+    legend.position = "right",
+    strip.text = element_text(size = 14, face = "bold"),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 21),
+    axis.title.x = element_text(size = 21))
+
+soc_type_boxplot
+```
+
+```{r}
+ggsave("soc_type_boxplot.jpeg", soc_type_boxplot, device = "jpeg", width = 16, height = 5, dpi = 300)
+```
+
+# Combine Drink type context box plots
+
+```{r}
+contexts_type_plot <- ggpubr::ggarrange(
+  loc_type_boxplot, soc_type_boxplot,
+  ncol = 1,
+  nrow = 2,
+  heights = c(1, 1),
+  labels = c("A", "B"),
+  font.label = list(size = 18, face = "bold"), # Optional formatting
+  label.x = 0,
+  label.y = 1
+)
+ggsave("contexts_type_plot.jpeg", contexts_type_plot, device = "jpeg", width = 16, height = 10, dpi = 300)
+```
+
+
+# Proportion statistics for contexts
+
+```{r}
+ema_lead %>%
+  ungroup() %>%
+  summarise(alone_prop = sum(social_context_overall == "alone", na.rm = T)/
+              sum(!is.na(social_context_overall)),
+            home_prop = sum(location == "home", na.rm = T)/
+              sum(!is.na(location)))
+```
+
+
+# heat map for location and social context
+
+```{r}
+heatmap_data <- ema_lead %>%
+  ungroup() %>%
+  filter(!is.na(location), !is.na(social_context_overall)) %>%
+  mutate(
+  soc_binary = ifelse(social_context_overall == "alone", "Alone", "Not Alone"),
+  loc_binary = ifelse(location == "home", "Home", "Not at Home")
+  ) %>%
+  group_by(loc_binary, soc_binary) %>%
+  summarise(
+    prop_alc = round(mean(prop_alc_responses, na.rm = T), 3),
+    n_obs = n()
+  )
+
+# Step 2: Create heatmap with text labels
+soc_loc_heatmap <- ggplot(heatmap_data, aes(x = loc_binary, y = soc_binary, fill = prop_alc)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = prop_alc), size = 4) +
+  scale_fill_gradient(
+    low = "#f0f0f0", high = "#5c677d", na.value = "grey90",
+    name = "Choices for\nAlcohol (%)",
+    limit = c(.3, .4)
+  ) +
+  labs(x = "Location", y = "Social Context", title = "Alcohol Choice Proportions") +
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+soc_loc_heatmap
+```
+
+```{r}
+ggsave("soc_loc_heatmap.jpeg", soc_loc_heatmap, device = "jpeg", width = 7, height = 5, dpi = 300)
+```
+
+
+# plot drink type by alc cue
+
+```{r}
+cue_type_plot <- facet_line_plot(subset(ema_long, !is.na(alc_cue)), alc_cue, alc_colors)
+cue_type_plot
+```
+
+
+

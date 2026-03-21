@@ -1,0 +1,556 @@
+---
+title: "k99_descriptive_statistics"
+author: "Gavin Kelly"
+date: "2025-07-01"
+output: html_document
+---
+
+This is a script for calculating the descriptive statistics for the k99.2 study.
+
+Line 48: all statistics for demographic paragraph describing sample.
+
+Lines 84-155: calculates surveys per person overall, by weekend/weekday, and by
+afternoon/evening. Also calculates number of people with > 20 completions.
+
+Line 159: calculates number of completed trials per session.
+
+Line 178: calculates correlations with demographic variables.
+
+Lines 226-281: calculates distribution of emotions. Uncomment to look at stress event (yes/no).
+
+Lines 283-369: looks at distribution of 6 variables of interest, and choices and bias
+by stress event (yes/no).
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+```
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(psych)
+```
+
+## Loading Data
+
+```{r}
+k99_shared_data <- read.csv("k99_shared_data.csv")
+```
+
+### Descriptives Statistics for Demographics
+
+```{r}
+k99_shared_data %>%
+  group_by(subject) %>%
+  slice(1) %>%
+  ungroup() %>%
+  summarise(
+    mean_age = mean(age),
+    sd_age = sd(age),
+    min_age = min(age),
+    max_age = max(age),
+    prop_female = sum(sex == "female", na.rm = T) / sum(!is.na(sex)),
+    prop_male = sum(sex == "male", na.rm = T) / sum(!is.na(sex)),
+    prop_woman = sum(gender == "woman", na.rm = T) / sum(!is.na(gender)),
+    prop_man = sum(gender == "man", na.rm = T) / sum(!is.na(gender)),
+    prop_nonbinary = 1 - prop_woman - prop_man,
+    prop_white = sum(race == "white", na.rm = T) / sum(!is.na(race)),
+    prop_asian = sum(race %in% c("east_asian", "south_asian", "southeast_asian"), na.rm = T) 
+               / sum(!is.na(race)),
+    prop_black = sum(race == "african_american", na.rm = T) / sum(!is.na(race)),
+    prop_multiple_races = sum(race == "multiple", na.rm = T) / sum(!is.na(race)),
+    prop_hispanic = sum(race == "hispanic", na.rm = T) / sum(!is.na(race)),
+    prop_straight = sum(sexuality == "straight", na.rm = T) / sum(!is.na(sexuality)),
+    prop_queer = 1 - prop_straight,
+    prop_student = sum(student == "yes", na.rm = T) / sum(!is.na(student)),
+    prop_full_time = sum(employment == "full_time", na.rm = T) / sum(!is.na(employment)),
+    prop_part_time = sum(employment == "part_time", na.rm = T) / sum(!is.na(employment)),
+    prop_unemployed = sum(employment == "unemployed", na.rm = T) / sum(!is.na(employment)),
+    median_audit = median(audit_score, na.rm = T),
+    mean_audit = mean(audit_score, na.rm = T), 
+    sd_audit = sd(audit_score, na.rm = T), 
+    min_audit = min(audit_score, na.rm = T),
+    max_audit = max(audit_score, na.rm = T)
+  )
+```
+
+
+### Descriptive Statistics for EMA Responses
+
+This prints the number of sessions completed per person.
+
+```{r}
+k99_shared_data %>%
+  filter(!is.na(response)) %>%
+  distinct(subject, session) %>%
+  count(subject) %>%
+  summarise(avg_sessions = mean(n),
+            sd = sd(n),
+            range = range(n))
+```
+
+This prints average sessions on weekend versus weekday.
+
+
+```{r}
+# first we need to create a new df
+ema_grid <- expand.grid(
+  subject = 1:250,
+  day_number = 1:14,
+  daily_session = c("sess_1", "sess_2", "sess_3", "sess_4", "sess_5")
+)
+#add day num to merged with days since baseline
+k99_shared_data_9 <- k99_shared_data %>%
+  filter(!is.na(response)) %>%
+  group_by(subject) %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"),
+         baseline_date = as.Date(end_date_string, format = "%m/%d/%Y"),
+         day_number = as.numeric(difftime(date, baseline_date, units = "days"))) %>%
+  mutate(
+    day_number = ifelse(day_number >= 1 & day_number <= 14, day_number, NA)
+  ) %>% #there are 66000 NAs after this.
+  group_by(subject, day_number) %>%
+  mutate(num_completions = n_distinct(session),
+         sess_1 = ifelse(num_completions >= 1, 1, 0),
+         sess_2 = ifelse(num_completions >= 2, 1, 0),
+         sess_3 = ifelse(num_completions >= 3, 1, 0),
+         sess_4 = ifelse(num_completions >= 4, 1, 0),
+         sess_5 = ifelse(num_completions >= 5, 1, 0),
+         hour = hour(hms(time)),
+         time_of_day = case_when(
+            hour >= 0 & hour < 8 ~ "evening",
+            hour >= 8 & hour < 18 ~ "afternoon",
+            hour >= 18 & hour < 24 ~ "evening",
+            TRUE ~ "other"
+      )) %>%
+  ungroup() %>%
+  pivot_longer(cols = c("sess_1", "sess_2", "sess_3", "sess_4", "sess_5"),
+               names_to = "daily_session",
+               values_to = "session_complete")
+
+k99_shared_data_9 <- k99_shared_data_9[c("subject", "baseline_date", "day_number", "daily_session",
+                                         "session_complete", "day_of_week", "session",
+                                         "time_of_day")]
+
+ema_complete <- ema_grid %>%
+  left_join(k99_shared_data_9, by = c("subject", "day_number", "daily_session"))
+
+# there are some NAs because some did not have any sessions completed on a day
+ema_complete[is.na(ema_complete)] <- 0
+```
+
+
+
+```{r}
+ema_complete_2 <- ema_complete %>%
+  group_by(subject, day_number, daily_session) %>%
+  slice(1) %>%
+  ungroup()%>%
+  group_by(subject, day_number) %>%
+  mutate(
+    num_completions = sum(session_complete), .groups = "drop"
+  ) %>%
+  ungroup()
+
+#this does exclude people who completed sessions outside of 14 days (only a few).
+
+# sometimes day of week is zero, so we need to fill in with baseline_date + day number
+
+ema_complete_2 <- ema_complete_2 %>%
+  group_by(subject) %>%
+  mutate(
+    day_of_week = case_when(
+      day_of_week == 0 ~ wday(as.Date(as.Date(baseline_date) + day_number), label = TRUE),
+      TRUE ~ day_of_week
+      )
+    )
+
+ema_complete_2 %>%
+  mutate(day_type = ifelse(day_of_week %in% c("Sat", "Sun"), "weekend", "weekday")) %>%
+  ungroup()%>%
+  group_by(day_type) %>%
+  summarise(
+    avg_completions = mean(num_completions, na.rm = TRUE),
+    sd_completions = sd(num_completions, na.rm = TRUE),
+    range_completions = range(num_completions, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+This prints average sessions per day in the afternoon (anytime before 6pm) vs the evening.
+
+```{r}
+ema_complete_3 <- ema_complete %>%
+  group_by(subject, day_number, time_of_day, day_of_week, session) %>%
+  slice(1) %>%
+  ungroup() %>%
+  group_by(subject, day_number) %>%
+  mutate(
+    afternoon_sessions = sum(time_of_day == "afternoon", na.rm = TRUE),
+    evening_sessions = sum(time_of_day == "evening", na.rm = TRUE),
+  ) %>%
+  slice(1)
+ema_complete_3 %>%
+  ungroup() %>%
+  summarise(
+    avg_aft_completions = mean(afternoon_sessions, na.rm = TRUE),
+    sd_aft_completions = sd(afternoon_sessions, na.rm = TRUE),
+    range_aft_completions = range(afternoon_sessions, na.rm = TRUE),
+    
+    avg_eve_completions = mean(evening_sessions, na.rm = TRUE),
+    sd_eve_completions = sd(evening_sessions, na.rm = TRUE),
+    range_eve_completions = range(evening_sessions, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+This prints the # of participants with more than 20 EMA assessment completions.
+
+```{r}
+k99_shared_data %>%
+  filter(!is.na(response)) %>%
+  distinct(subject, session) %>%
+  count(subject) %>%
+  filter(n > 20) %>%
+  summarise(prop_participants = n()/250)
+```
+
+This prints the number of trials completed per session.
+
+```{r}
+session_trial_counts <- k99_shared_data %>%
+  filter(!is.na(response)) %>%
+  count(subject, session, name = "n_trials")
+#this counts the # of observations in each group (every session for every subject)
+
+session_trial_counts %>%
+  summarise(
+    mean_trials = mean(n_trials),
+    sd_trials = sd(n_trials),
+    min_trials = min(n_trials),
+    max_trials = max(n_trials),
+    percent_below_120 = mean(n_trials < 120) * 100
+  )
+#we get 951028/5977 when removing NA trials
+```
+
+Now we can calculate correlations with demographic variables. We first need to 
+merge the count data frame with the baseline.
+
+```{r}
+k99_shared_data_2 <- k99_shared_data %>%
+  group_by(subject, session) %>%
+  mutate(
+    mean_prop_alc_responses = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    mean_median_rt = median(rt, na.rm = T)
+  ) %>%
+    slice(1)
+k99_shared_data_2 <- k99_shared_data_2 %>%
+  group_by(subject) %>%
+  mutate(
+    mean_stress_state = mean(stress_state, na.rm = T),
+    mean_NA_state = mean(NA_state, na.rm = T),
+    mean_PA_state = mean(PA_state, na.rm = T),
+    mean_prop_alc_responses = mean(mean_prop_alc_responses),
+    mean_median_rt = mean(mean_median_rt)
+  ) %>%
+  slice(1)
+```
+
+This prints the correlations between the variables, but nothing seems interesting.
+
+```{r}
+cor_df2 <- k99_shared_data_2[c("subject", "mean_stress_state", "mean_NA_state", "mean_PA_state",
+                            "mean_prop_alc_responses", "mean_median_rt", 
+                            "B", "drift", "alcbias", "nondectime", "audit_score",
+                            "dmq_social", "dmq_enhancement", "dmq_coping", "dmq_conformity"s)]
+
+sessions_df <- k99_shared_data %>%
+  filter(!is.na(response)) %>%
+  distinct(subject, session) %>%
+  count(subject, name = "n_sessions") #this counts the # observations in each group (subject)
+#unfortunately we can't do this earlier, as it drops all other variables.
+
+cor_df2 <- cor_df2 %>%
+  left_join(sessions_df, by = "subject")
+cor_df2$subject <- NULL
+cor_matrix2 <- cor_df2 %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  round(., 2)
+cor_matrix2
+cor(cor_df2$audit_score, cor_df2$mean_prop_alc_responses)
+```
+
+We need to reformat the data to compare alcoholic and non-alcoholic drinks.
+
+```{r}
+drink_vals <- c("alc01", "alc02", "alc03", "alc04", "alc05", 
+              "alc06", "alc07", "alc08", "alc09", "alc10", 
+              "alc11", "alc12", "alc13", "alc14", "alc15", 
+              "alc16", "alc17", "alc18", "alc19", "alc20", 
+              "alc21", "alc22", "alc23", "alc24", "alc25",
+              "alc26", "alc27", "alc28", "alc29", "alc30",
+              "soft01", "soft02", "soft03", "soft04", "soft05", 
+              "soft06", "soft07", "soft08", "soft09", "soft10", 
+              "soft11", "soft12", "soft13", "soft14", "soft15", 
+              "soft16", "soft17", "soft18", "soft19", "soft20", 
+              "soft21", "soft22", "soft23", "soft24", "soft25",
+              "soft26", "soft27", "soft28", "soft29", "soft30")
+baseline_data <- k99_shared_data %>%
+  group_by(subject) %>%
+  slice(1) %>%
+  ungroup()
+baseline_long <- pivot_longer(baseline_data, cols = all_of(drink_vals), 
+                              names_to = "drink", values_to = "rating")
+```
+
+```{r}
+non_alcoholic <- c("soft01", "soft02", "soft03", "soft04", "soft05", 
+              "soft06", "soft07", "soft08", "soft09", "soft10", 
+              "soft11", "soft12", "soft13", "soft14", "soft15", 
+              "soft16", "soft17", "soft18", "soft19", "soft20", 
+              "soft21", "soft22", "soft23", "soft24", "soft25",
+              "soft26", "soft27", "soft28", "soft29", "soft30")
+baseline_long$alcoholic = "none"
+baseline_long <- baseline_long %>%
+  mutate(
+    alcoholic = case_when(
+      drink %in% non_alcoholic ~ "Non-Alcoholic Drinks",
+      TRUE ~ "Alcoholic Drinks"
+    )
+  )
+```
+
+This prints the rating distributions of alcoholic/non-alcoholic drinks and the 
+correlation within person.
+
+```{r}
+baseline_long %>%
+  group_by(alcoholic) %>%
+  summarize(
+    mean_rating = mean(rating, na.rm = TRUE),
+    sd_rating = sd(rating, na.rm = TRUE),
+    range = range(rating)
+  )
+
+bl1 <- baseline_long %>%
+  group_by(alcoholic, subject) %>%
+  summarize(mean_rating = mean(rating, na.rm = TRUE), .groups = "drop")
+bl1_wide <- bl1 %>%
+  pivot_wider(names_from = alcoholic, values_from = mean_rating)
+# cor(bl1_wide$"Alcoholic Drinks", bl1_wide$"Non-Alcoholic Drinks", use = "pairwise.complete.obs")
+```
+
+Here we look at descriptives for emotion ratings. Uncomment the group_by line
+to view descriptives for stressful/non-stressful events.
+
+```{r}
+k99_shared_data %>% 
+  group_by(subject, session) %>%
+  slice(1) %>%
+  ungroup() %>%
+  # group_by(stress_event) %>%
+  summarize(
+    mean_na = mean(NA_state, na.rm = T),
+    sd_na = sd(NA_state, na.rm = T),
+    range_NA = range(NA_state, na.rm = T),
+    mean_pa = mean(PA_state, na.rm = T),
+    sd_pa = sd(PA_state, na.rm = T),
+    range_pA = range(PA_state, na.rm = T),
+    mean_stress = mean(stress_state, na.rm = T),
+    sd_stress = sd(stress_state, na.rm = T),
+    range_stress = range(stress_state, na.rm = T)
+  )
+```
+
+We need to calculate values for the 6 variables of interest for each session.
+
+```{r}
+k99_shared_data_5 <- k99_shared_data %>%
+  group_by(subject, session) %>%
+  mutate(
+    prop_alc = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    median_rt = median(rt, na.rm = T),
+    mean_boundary = mean(B, na.rm = T),
+    mean_bias = mean(alcbias, na.rm = T),
+    mean_drift = mean(drift, na.rm = T),
+    mean_nondec = mean(nondectime, na.rm = T)
+  ) %>% 
+  slice(1) %>%
+  ungroup()
+k99_shared_data_5 <- k99_shared_data_5[c("subject", "stress_event", "stress_event_intensity",
+                    "prop_alc", "median_rt",
+                    "mean_boundary", "mean_bias",
+                    "mean_drift", "mean_nondec")]
+```
+
+We can now calculate the distributions of these 6 variables.
+
+```{r}
+k99_shared_data_5 %>%
+  ungroup() %>%
+  summarise(
+    mean_prop = mean(prop_alc, na.rm = T),
+    sd_prop = sd(prop_alc, na.rm = T),
+    range_prop = range(prop_alc, na.rm = T),
+
+    mean_rt = mean(median_rt, na.rm = T),
+    sd_rt = sd(median_rt, na.rm = T),
+    range_rt = range(median_rt, na.rm = T),
+  )
+k99_shared_data_5 %>%
+  summarise(across(
+    c(mean_bias, mean_boundary, mean_drift, mean_nondec),
+    list(mean = ~mean(.x, na.rm = TRUE),
+         sd = ~sd(.x, na.rm = TRUE),
+         range_low = ~range(.x, na.rm = TRUE)[1],
+         range_high = ~range(.x, na.rm = TRUE)[2])
+  ))
+
+```
+
+We can see how choices for alcohol and bias change by stress event (yes/no).
+
+```{r}
+k99_shared_data_5 %>% 
+  group_by(stress_event) %>%
+  summarise(across(
+    c(prop_alc, mean_bias),
+    list(mean = ~mean(.x, na.rm = TRUE),
+         sd = ~sd(.x, na.rm = TRUE),
+         range_low = ~range(.x, na.rm = TRUE)[1],
+         range_high = ~range(.x, na.rm = TRUE)[2])
+  ))
+```
+
+We need to compute the % of response times under 300ms.
+
+```{r}
+k99_shared_data %>%
+  ungroup() %>%
+  summarise(
+    rt_prop = sum(rt < .3, na.rm = T) / sum(!is.na(response), na.rm = T)
+  )
+```
+
+Compute the choices for alcohol (%) at each level of the value function
+
+```{r}
+k99_shared_data %>%
+  group_by(subject, value_function) %>%
+  mutate(val_prop_resp = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+      val_med_rt = median(rt, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(value_function) %>%
+  summarise(
+    mean_resp = mean(val_prop_resp, na.rm = T),
+    mean_rt = mean(val_med_rt, na.rm = T)
+  )
+```
+
+
+Correlations between proportion of choices for alcohol with intended drinks and
+number of drinks actually consumed.
+
+```{r}
+# first we need to create a new df
+ema_lead_grid <- expand.grid(
+  subject = 1:250,
+  day_number = 1:14
+)
+#add day num to merged with days since baseline
+k99_lead_data <- k99_shared_data %>%
+  filter(!is.na(response)) %>%
+  group_by(subject) %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"),
+         baseline_date = as.Date(end_date_string, format = "%m/%d/%Y"),
+         day_number = as.numeric(difftime(date, baseline_date, units = "days"))) %>%
+  mutate(
+    day_number = ifelse(day_number >= 1 & day_number <= 14, day_number, NA)
+  )
+
+k99_lead_data <- k99_lead_data[c("subject", "session", "day_number", "alc_yday",
+                                 "alc_intend", "prop_alc_responses", "time_of_day")]
+
+ema_lead <- ema_lead_grid %>%
+  left_join(k99_lead_data, by = c("subject", "day_number"))
+
+ema_lead <- ema_lead %>%
+  group_by(subject, session, day_number) %>%
+  slice(1) %>%
+  ungroup() %>%
+  arrange(subject, day_number) %>%
+  ungroup()
+```
+
+```{r}
+#for some reason when they are all NA, min returns Inf, so i have to fix that
+ema_lead <- ema_lead %>%
+  group_by(subject, day_number) %>%
+  mutate(alc_yday = min(alc_yday, na.rm = T)) %>%
+  mutate(alc_yday = case_when(
+    alc_yday == "Inf" ~ NA,
+    TRUE ~ alc_yday
+  ))
+```
+
+```{r}
+alc_yday_shifted <- ema_lead %>%
+  group_by(subject, day_number) %>%
+  summarise(alc_yday_day = first(alc_yday), .groups = "drop") %>%
+  arrange(subject, day_number) %>%
+  group_by(subject) %>%
+  mutate(alc_consumed_today = lead(alc_yday_day))  # shift back one day
+
+# Join this shifted value back to the original session-level data
+ema_lead <- ema_lead %>%
+  left_join(alc_yday_shifted %>% select(subject, day_number, alc_consumed_today),
+            by = c("subject", "day_number"))
+```
+
+```{r}
+cor(ema_lead$alc_intend, ema_lead$prop_alc_responses, use = "complete.obs")
+cor(ema_lead$alc_consumed_today, ema_lead$prop_alc_responses, use = "complete.obs")
+```
+
+```{r}
+# look at difference in correlations between afternoon and evening
+ema_lead %>%
+  filter(!is.na(time_of_day)) %>%
+  group_by(time_of_day) %>%
+  summarise(
+    cor_consumed_prop = cor(alc_consumed_today, prop_alc_responses, use = "complete.obs"),
+    cor_intend_prop = cor(alc_intend, prop_alc_responses, use = "complete.obs")
+  )
+```
+
+```{r}
+k99_shared_data %>%
+  group_by(subject, session) %>%
+  slice(1) %>%
+  ungroup() %>%
+  group_by(time_of_day) %>%
+  summarise(
+    cor_intend_prop = cor(alc_intend, prop_alc_responses, use = "complete.obs")
+  )
+```
+
+
+
+
+
+
+
+
+
+
+

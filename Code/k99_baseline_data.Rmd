@@ -1,0 +1,973 @@
+---
+title: "k99 Baseline Data Processing"
+author: "Gavin Kelly"
+date: "2025-05-28"
+output: html_document
+---
+
+This is a data processing script for the k99 baseline data.
+
+I first rename the variables. (lines 42-182)
+I then calculate participant age. (lines 189-263)
+
+I then mutate the variables for each scale to be numeric, and calculate the
+scores and subscores. (lines 275-767)
+
+**For the UPPS, most items are REVERSED SCORED!!! (see line 589)**
+**I do NOT make a new variable for these items, but leave them in the same variable**
+**(e.g. upps_1), but the are ALREADY REVERSED**
+
+I then combine the race, gender, and sexuality variables, which
+are select multiple variables, into one single variable each. (lines 770-918)
+
+Finally, I mutate education and employment, change all empty strings/non-responses
+to NA, and save the csv. (lines 921-961)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+```
+
+## Load Packages
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(tidyr)
+library(psych)
+```
+
+
+## Loading Data
+
+```{r}
+baseline_data <- read.csv("baseline_data.csv")
+```
+
+## View Variable Names
+
+```{r}
+# colnames(baseline_data)
+```
+
+## Renaming Baseline Data Variables, change duration to minutes
+
+```{r}
+baseline_data <- rename(baseline_data, end_date = EndDate)
+baseline_data <- rename(baseline_data, progress = Progress)
+baseline_data <- rename(baseline_data, duration_minutes = Duration..in.seconds.)
+baseline_data$duration_minutes <- baseline_data$duration_minutes / 60
+baseline_data <- rename(baseline_data, finished = Finished)
+baseline_data <- rename(baseline_data, employment = employment.)
+```
+
+# Renaming the AUDIT
+
+```{r}
+baseline_data <- rename(baseline_data, audit_1 = audit1)
+baseline_data <- rename(baseline_data, audit_2 = audit2)
+baseline_data <- rename(baseline_data, audit_3 = audit3)
+baseline_data <- rename(baseline_data, audit_4 = audit4)
+baseline_data <- rename(baseline_data, audit_5 = audit5)
+baseline_data <- rename(baseline_data, audit_6 = audit6)
+baseline_data <- rename(baseline_data, audit_7 = audit7)
+baseline_data <- rename(baseline_data, audit_8 = audit8)
+baseline_data <- rename(baseline_data, audit_9 = audit9)
+baseline_data <- rename(baseline_data, audit_10 = audit10)
+```
+
+10 items is correct, because the AUDIT has 10 questions:
+https://www.sbirt.care/pdfs/tools/AUDIT.PDF
+
+## Renaming the DMQ
+
+```{r}
+baseline_data <- rename(baseline_data, dmq_1 = DMQ1)
+baseline_data <- rename(baseline_data, dmq_2 = DMQ4)
+baseline_data <- rename(baseline_data, dmq_3 = DMQ_6)
+baseline_data <- rename(baseline_data, dmq_4 = DMQ_17)
+baseline_data <- rename(baseline_data, dmq_5 = DMQ_21)
+baseline_data <- rename(baseline_data, dmq_6 = DMQ_22)
+baseline_data <- rename(baseline_data, dmq_7 = DMQ_23)
+baseline_data <- rename(baseline_data, dmq_8 = DMQ_24)
+baseline_data <- rename(baseline_data, dmq_9 = DMQ_25)
+baseline_data <- rename(baseline_data, dmq_10 = DMQ_26)
+baseline_data <- rename(baseline_data, dmq_11 = DMQ_27)
+baseline_data <- rename(baseline_data, dmq_12 = DMQ_28)
+baseline_data <- rename(baseline_data, dmq_13 = DMQ_29)
+baseline_data <- rename(baseline_data, dmq_14 = DMQ_30)
+baseline_data <- rename(baseline_data, dmq_15 = DMQ_31)
+baseline_data <- rename(baseline_data, dmq_16 = DMQ_32)
+baseline_data <- rename(baseline_data, dmq_17 = DMQ_33)
+baseline_data <- rename(baseline_data, dmq_18 = DMQ_34)
+baseline_data <- rename(baseline_data, dmq_19 = DMQ_35)
+baseline_data <- rename(baseline_data, dmq_20 = DMQ_36)
+```
+
+20 items is correct, because the DMQR has 20 questions:
+https://arc.psych.wisc.edu/self-report/drinking-motives-questionnaire-revised-dmqr/
+
+## Renaming the UPPS-P subscale
+
+```{r}
+baseline_data <- rename(baseline_data, upps_1 = UPPS2)
+baseline_data <- rename(baseline_data, upps_2 = UPPS5)
+baseline_data <- rename(baseline_data, upps_3 = UPPS7)
+baseline_data <- rename(baseline_data, upps_4 = UPPS10)
+baseline_data <- rename(baseline_data, upps_5 = UPPS12)
+baseline_data <- rename(baseline_data, upps_6 = UPPS15)
+baseline_data <- rename(baseline_data, upps_7 = upps1_7)
+baseline_data <- rename(baseline_data, upps_8 = upps1_8)
+baseline_data <- rename(baseline_data, upps_9 = upps1_9)
+baseline_data <- rename(baseline_data, upps_10 = upps1_10)
+baseline_data <- rename(baseline_data, upps_11 = upps1_11)
+baseline_data <- rename(baseline_data, upps_12 = upps1_12)
+baseline_data <- rename(baseline_data, upps_13 = upps1_13)
+baseline_data <- rename(baseline_data, upps_14 = upps1_14)
+baseline_data <- rename(baseline_data, upps_15 = upps1_15)
+baseline_data <- rename(baseline_data, upps_16 = upps1_16)
+baseline_data <- rename(baseline_data, upps_17 = upps1_17)
+baseline_data <- rename(baseline_data, upps_18 = upps1_18)
+baseline_data <- rename(baseline_data, upps_19 = upps1_19)
+baseline_data <- rename(baseline_data, upps_20 = upps1_20)
+baseline_data <- rename(baseline_data, upps_21 = upps1_21)
+baseline_data <- rename(baseline_data, upps_22 = upps1_22)
+baseline_data <- rename(baseline_data, upps_23 = upps1_23)
+baseline_data <- rename(baseline_data, upps_24 = upps1_24)
+baseline_data <- rename(baseline_data, upps_25 = upps1_25)
+baseline_data <- rename(baseline_data, upps_26 = upps1_26)
+```
+
+https://repository.niddk.nih.gov/media/studies/teen-labs/Forms/3.%20Final/Inquisit/UPPS-P%2059-item%20ver.pdf
+
+## Renaming the CERQ
+
+```{r}
+baseline_data <- rename(baseline_data, cerq_1 = CERQ.Questions_1)
+baseline_data <- rename(baseline_data, cerq_2 = CERQ.Questions_2)
+baseline_data <- rename(baseline_data, cerq_3 = CERQ.Questions_3)
+baseline_data <- rename(baseline_data, cerq_4 = CERQ.Questions_4)
+baseline_data <- rename(baseline_data, cerq_5 = CERQ.Questions_5)
+baseline_data <- rename(baseline_data, cerq_6 = CERQ.Questions_6)
+baseline_data <- rename(baseline_data, cerq_7 = CERQ.Questions_7)
+baseline_data <- rename(baseline_data, cerq_8 = CERQ.Questions_8)
+baseline_data <- rename(baseline_data, cerq_9 = CERQ.Questions_9)
+baseline_data <- rename(baseline_data, cerq_10 = CERQ.Questions_10)
+baseline_data <- rename(baseline_data, cerq_11 = CERQ.Questions_11)
+baseline_data <- rename(baseline_data, cerq_12 = CERQ.Questions_12)
+baseline_data <- rename(baseline_data, cerq_13 = CERQ.Questions_13)
+baseline_data <- rename(baseline_data, cerq_14 = CERQ.Questions_14)
+baseline_data <- rename(baseline_data, cerq_15 = CERQ.Questions_15)
+baseline_data <- rename(baseline_data, cerq_16 = CERQ.Questions_16)
+baseline_data <- rename(baseline_data, cerq_17 = CERQ.Questions_17)
+baseline_data <- rename(baseline_data, cerq_18 = CERQ.Questions_18)
+```
+
+We used an 18 item subscale of the full 36 item scale:
+https://www.carepatron.com/files/cognitive-emotion-regulation-questionnaire-cerq.pdf
+
+## Renaming the ERS
+
+```{r}
+baseline_data <- rename(baseline_data, ers_1 = ERS.responses._1)
+baseline_data <- rename(baseline_data, ers_2 = ERS.responses._2)
+baseline_data <- rename(baseline_data, ers_3 = ERS.responses._3)
+baseline_data <- rename(baseline_data, ers_4 = ERS.responses._4)
+baseline_data <- rename(baseline_data, ers_5 = ERS.responses._5)
+baseline_data <- rename(baseline_data, ers_6 = ERS.responses._6)
+baseline_data <- rename(baseline_data, ers_7 = ERS.responses._7)
+baseline_data <- rename(baseline_data, ers_8 = ERS.responses._8)
+baseline_data <- rename(baseline_data, ers_9 = ERS.responses._9)
+baseline_data <- rename(baseline_data, ers_10 = ERS.responses._10)
+baseline_data <- rename(baseline_data, ers_11 = ERS.responses._11)
+baseline_data <- rename(baseline_data, ers_12 = ERS.responses._12)
+baseline_data <- rename(baseline_data, ers_13 = ERS.responses._13)
+baseline_data <- rename(baseline_data, ers_14 = ERS.responses._14)
+baseline_data <- rename(baseline_data, ers_15 = ERS.responses._15)
+baseline_data <- rename(baseline_data, ers_16 = ERS.responses._16)
+baseline_data <- rename(baseline_data, ers_17 = ERS.responses._17)
+baseline_data <- rename(baseline_data, ers_18 = ERS.responses._18)
+baseline_data <- rename(baseline_data, ers_19 = ERS.responses._19)
+baseline_data <- rename(baseline_data, ers_20 = ERS.responses._20)
+baseline_data <- rename(baseline_data, ers_21 = ERS.responses._21)
+```
+
+We used a 21 item subscale of the full scale:
+https://www.carepatron.com/files/emotion-reactivity-scale.pdf
+
+## Calculating Participant Age
+
+The DOB is listed twice in the data, but I completed a sanity check to ensure it is the same for each variable.
+
+```{r}
+baseline_data <- rename(baseline_data, dob_month = dob.1_1.x)
+baseline_data <- rename(baseline_data, dob_day = dob.2_1.x)
+baseline_data <- rename(baseline_data, dob_year = dob.3_1.x)
+```
+
+I need to convert DOB to chr in this format: 1/30/2025
+
+```{r}
+baseline_data$dob_day <- as.character(baseline_data$dob_day)
+baseline_data$dob_year <- as.character(baseline_data$dob_year)
+
+#change month to number rather than word
+baseline_data <- baseline_data %>%
+  mutate(dob_month = case_when(
+    dob_month == "January" ~ "1",
+    dob_month == "February" ~ "2",
+    dob_month == "March" ~ "3",
+    dob_month == "April" ~ "4",
+    dob_month == "May" ~ "5",
+    dob_month == "June" ~ "6",
+    dob_month == "July" ~ "7",
+    dob_month == "August" ~ "8",
+    dob_month == "September" ~ "9",
+    dob_month == "October" ~ "10",
+    dob_month == "November" ~ "11",
+    dob_month == "December" ~ "12"
+  ))
+```
+
+Now I will combine the chr values for DOB into the correct string format using paste.
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    dob_string = paste(dob_month, dob_day, dob_year, sep = "/")
+  )
+
+# I will delete the time stamp from end date to make it the same
+# format at dob and compatible with the mdy() function
+
+baseline_data <- baseline_data %>%
+  group_by(subject) %>%
+  mutate(
+    end_date_string = unlist(strsplit(end_date, split=' ', fixed=TRUE))[1]
+  ) %>%
+  ungroup()
+# head(baseline_data)
+```
+
+I will now add a variable for participant age using interval.
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    age = year(as.period(interval(start=mdy(dob_string), end=mdy(end_date_string))))
+  )
+```
+
+I will now drop the DOB variables.
+
+```{r}
+baseline_data$end_date <- NULL
+baseline_data$dob_month <- NULL
+baseline_data$dob_day <- NULL
+baseline_data$dob_year <- NULL
+baseline_data$dob.1_1.y <- NULL
+baseline_data$dob.2_1.y <- NULL
+baseline_data$dob.3_1.y <- NULL
+baseline_data$dob_string <- NULL
+#now we only have age
+```
+
+The column names are finished, so now we can fix the values of the variables.
+
+## Mutating Audit Variables
+
+Each response is scored 0-4 ((0, 2, 4) for the last two items) and then scores are summed.
+
+While converting responses to integers, I also sanity checked that there were only expected values.
+
+Before converting, we check how many NA values are in the variable.
+
+```{r}
+audit_vars <- c("audit_1", "audit_2", "audit_3", "audit_4", "audit_5",
+                "audit_6", "audit_7", "audit_8", "audit_9", "audit_10")
+audit_NA_values <- 0
+for (name in audit_vars) {
+  audit_NA_values <- audit_NA_values + sum(is.na(baseline_data[,name]))
+}
+print(audit_NA_values)
+```
+
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_1 = case_when(
+      audit_1 == "Never" ~ "0",
+      audit_1 == "Monthly or less" ~ "1",
+      audit_1 == "Two to four times a month" ~ "2",
+      audit_1 == "Two to three times a week" ~ "3",
+      audit_1 == "Four or more times a week" ~ "4"
+    )
+  )
+baseline_data$audit_1 <- as.integer(baseline_data$audit_1)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_2 = case_when(
+      audit_2 == "1 or 2" ~ "0",
+      audit_2 == "3 or 4" ~ "1",
+      audit_2 == "5 or 6" ~ "2",
+      audit_2 == "7 to 9" ~ "3",
+      audit_2 == "10 or more" ~ "4"
+    )
+  )
+baseline_data$audit_2 <- as.integer(baseline_data$audit_2)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_3 = case_when(
+      audit_3 == "Never" ~ "0",
+      audit_3 == "Less than monthly" ~ "1",
+      audit_3 == "Monthly" ~ "2",
+      audit_3 == "Weekly" ~ "3",
+      audit_3 == "Daily or almost daily" ~ "4"
+    )
+  )
+baseline_data$audit_3 <- as.integer(baseline_data$audit_3)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_4 = case_when(
+      audit_4 == "Never" ~ "0",
+      audit_4 == "Less than monthly" ~ "1",
+      audit_4 == "Monthly" ~ "2",
+      audit_4 == "Weekly" ~ "3",
+      audit_4 == "Daily or almost daily" ~ "4"
+    )
+  )
+baseline_data$audit_4 <- as.integer(baseline_data$audit_4)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_5 = case_when(
+      audit_5 == "Never" ~ "0",
+      audit_5 == "Less than monthly" ~ "1",
+      audit_5 == "Monthly" ~ "2",
+      audit_5 == "Weekly" ~ "3",
+      audit_5 == "Daily or almost daily" ~ "4"
+    )
+  )
+baseline_data$audit_5 <- as.integer(baseline_data$audit_5)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_6 = case_when(
+      audit_6 == "Never" ~ "0",
+      audit_6 == "Less than monthly" ~ "1",
+      audit_6 == "Monthly" ~ "2",
+      audit_6 == "Weekly" ~ "3",
+      audit_6 == "Daily or almost daily" ~ "4"
+    )
+  )
+baseline_data$audit_6 <- as.integer(baseline_data$audit_6)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_7 = case_when(
+      audit_7 == "Never" ~ "0",
+      audit_7 == "Less than monthly" ~ "1",
+      audit_7 == "Monthly" ~ "2",
+      audit_7 == "Weekly" ~ "3",
+      audit_7 == "Daily or almost daily" ~ "4"
+    )
+  )
+baseline_data$audit_7 <- as.integer(baseline_data$audit_7)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_8 = case_when(
+      audit_8 == "Never" ~ "0",
+      audit_8 == "Less than monthly" ~ "1",
+      audit_8 == "Monthly" ~ "2",
+      audit_8 == "Weekly" ~ "3",
+      audit_8 == "Daily or almost daily" ~ "4"
+    )
+  )
+baseline_data$audit_8 <- as.integer(baseline_data$audit_8)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_9 = case_when(
+      audit_9 == "No" ~ "0",
+      audit_9 == "Yes, but not in the last year." ~ "2",
+      audit_9 == "Yes, during the last year." ~ "4"
+    )
+  )
+baseline_data$audit_9 <- as.integer(baseline_data$audit_9)
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_10 = case_when(
+      audit_10 == "No" ~ "0",
+      audit_10 == "Yes, but not in the last year." ~ "2",
+      audit_10 == "Yes, during the last year." ~ "4"
+    )
+  )
+baseline_data$audit_10 <- as.integer(baseline_data$audit_10)
+```
+
+AUDIT variables are all converted to integers from 0-4.
+
+We will now sum the variables to get the AUDIT overall score.
+
+```{r}
+baseline_data$audit_score <- rowSums(baseline_data[, audit_vars], na.rm=T)
+# hist(baseline_data$audit_score)
+```
+
+
+We can also add the low-severe risk classification.
+
+```{r}
+baseline_data$audit_risk_class <- "none"
+baseline_data <- baseline_data %>%
+  mutate(
+    audit_risk_class = case_when(
+      audit_score < 4 ~ "low",
+      audit_score < 10 ~ "risky",
+      audit_score < 14 ~ "harmful",
+      audit_score > 13 ~ "severe",
+      audit_score == "" ~ NA
+    )
+  )
+```
+
+After I have now coded all of these scales, I will check that the values are coded
+correctly (e.g. 1-5), items are reversed if they need to be, and the sub-scores are
+calculated correctly. To do this, I will check the item order using the csv and screenshots,
+and ensure each item is included in the correct sub-score using the scales doc
+and cross-referencing with pdfs of the scales found online.
+
+## Mutating DMQ Variables
+
+All items are scored from 1-5, and they have the same descriptors, so we can write a function to convert the values.
+
+```{r}
+convert_dmq <- function(dmq_question) {
+  baseline_data <- baseline_data %>%
+    mutate(
+      dmq_question = case_when(
+        dmq_question == "Almost Never/Never" ~ "1",
+        dmq_question == "Some of the Time" ~ "2",
+        dmq_question == "Half of the Time" ~ "3",
+        dmq_question == "Most of the Time" ~ "4",
+        dmq_question == "Almost Always/Always" ~ "5",
+        dmq_question == "" ~ NA
+      )
+    )
+  baseline_data$dmq_question <- as.integer(baseline_data$dmq_question)
+}
+```
+
+```{r}
+dmq_vars <- c("dmq_1", "dmq_2", "dmq_3", "dmq_4", "dmq_5", "dmq_6", "dmq_7", "dmq_8", 
+  "dmq_9", "dmq_10", "dmq_11", "dmq_12", "dmq_13", "dmq_14", "dmq_15", "dmq_16", "dmq_17", 
+  "dmq_18", "dmq_19", "dmq_20")
+```
+
+We can check how many unanswered dmq items there are. 
+
+```{r}
+dmq_NA_values <- 0
+for (name in dmq_vars) {
+  dmq_NA_values = dmq_NA_values + sum(is.na(baseline_data[,name])| 
+                                                baseline_data[,name] == "")
+}
+print(dmq_NA_values)
+# sum(is.na(baseline_data$dmq_1)| baseline_data$dmq_1 == "")
+```
+
+Now we can convert every question to integer scores using the function.
+
+```{r}
+for (name in dmq_vars) {
+  baseline_data[,name] <- convert_dmq(baseline_data[,name])
+}
+```
+
+We will now calculate the DMQ sub-scores, using this guide which has the same order:
+https://arc.psych.wisc.edu/self-report/drinking-motives-questionnaire-revised-dmqr/
+
+```{r}
+dmq_social_vars <- c("dmq_3", "dmq_5", "dmq_11", "dmq_14", "dmq_16")
+dmq_coping_vars <- c("dmq_1", "dmq_4", "dmq_6", "dmq_15", "dmq_17")
+dmq_enhancement_vars <- c("dmq_7", "dmq_9", "dmq_10", "dmq_13", "dmq_18")
+dmq_conformity_vars <- c("dmq_2", "dmq_8", "dmq_12", "dmq_19", "dmq_20")
+
+baseline_data$dmq_social <- rowMeans(baseline_data[, dmq_social_vars], na.rm=T)
+baseline_data$dmq_coping <- rowMeans(baseline_data[, dmq_coping_vars], na.rm=T)
+baseline_data$dmq_enhancement <- rowMeans(baseline_data[, dmq_enhancement_vars], na.rm=T)
+baseline_data$dmq_conformity <- rowMeans(baseline_data[, dmq_conformity_vars], na.rm=T)
+
+# hist(baseline_data$dmq_social)
+# hist(baseline_data$dmq_coping)
+# hist(baseline_data$dmq_enhancement)
+# hist(baseline_data$dmq_conformity)
+```
+
+## Mutating UPPS variables
+
+First check if there are any unanswered items.
+
+```{r}
+upps_vars <- c("upps_1", "upps_2", "upps_3", "upps_4",
+               "upps_5", "upps_6", "upps_7", "upps_8", "upps_9",
+               "upps_10", "upps_11", "upps_12", "upps_13", "upps_14",
+               "upps_15", "upps_16", "upps_17", "upps_18", "upps_19",
+               "upps_20", "upps_21", "upps_22", "upps_23", "upps_24",
+               "upps_25", "upps_26")
+upps_NA_values <- 0
+for (name in upps_vars) {
+  upps_NA_values = upps_NA_values + sum(is.na(baseline_data[,name])|
+                                          baseline_data[,name] == "")
+}
+print(upps_NA_values)
+```
+
+The UPPS is scored 1-4, but some items are reversed, so we will make a function 
+for standard and reversed items.
+
+```{r}
+convert_upps_standard <- function(upps_question) {
+  baseline_data <- baseline_data %>%
+    mutate(
+      upps_question = case_when(
+        upps_question == "Agree Strongly" ~ "1",
+        upps_question == "Agree Somewhat" ~ "2",
+        upps_question == "Disagree Somewhat" ~ "3",
+        upps_question == "Disagree Strongly" ~ "4",
+        upps_question == "" ~ NA
+      )
+    )
+  baseline_data$upps_question <- as.integer(baseline_data$upps_question)
+}
+```
+
+For reversed items, disagree strongly is scored as 1, and agree strongly is scored as 4.
+
+I will not rename the reversed items; the reversed score will just be integrated
+into the pre-existing variable.
+
+```{r}
+convert_upps_reversed <- function(upps_question) {
+  baseline_data <- baseline_data %>%
+    mutate(
+      upps_question = case_when(
+        upps_question == "Agree Strongly" ~ "4",
+        upps_question == "Agree Somewhat" ~ "3",
+        upps_question == "Disagree Somewhat" ~ "2",
+        upps_question == "Disagree Strongly" ~ "1",
+        upps_question == "" ~ NA
+      )
+    )
+  baseline_data$upps_question <- as.integer(baseline_data$upps_question)
+}
+```
+
+Here we separate variables by whether they are reversed or not. There is only
+one non-reversed item. This is confirmed by online pdf, only "I always keep
+my feelings under control" is not reversed, and all of the positive urgency items
+are reversed.
+https://repository.niddk.nih.gov/media/studies/teen-labs/Forms/3.%20Final/Inquisit/UPPS-P%2059-item%20ver.pdf
+
+```{r}
+upps_standard_vars <- c("upps_22")
+upps_reversed_vars <- c("upps_1", "upps_2", "upps_3", "upps_4", "upps_5",
+                        "upps_6", "upps_7", "upps_8", "upps_9", "upps_10", "upps_11",
+                        "upps_12", "upps_13", "upps_14", "upps_15", "upps_16",
+                        "upps_17", "upps_18", "upps_19", "upps_20", "upps_21",
+                        "upps_23", "upps_24", "upps_25", "upps_26")
+```
+
+We will mutate UPPS variable scores from string to int.
+
+```{r}
+for (name in upps_standard_vars) {
+  baseline_data[,name] <- convert_upps_standard(baseline_data[,name])
+}
+for (name in upps_reversed_vars) {
+  baseline_data[,name] <- convert_upps_reversed(baseline_data[,name])
+}
+```
+
+We will separate variables into groups to calculate sub-scores. There should only
+be 12 negative urgency vars and 14 positive urgency vars.
+
+```{r}
+upps_negative_urgency_vars <- c("upps_1", "upps_3", "upps_5", "upps_7", "upps_9", 
+                                "upps_11", "upps_13", "upps_15", "upps_17", "upps_20",
+                                "upps_22", "upps_25")
+upps_positive_urgency_vars <- c("upps_2", "upps_4", "upps_6", "upps_8", "upps_10", 
+                                "upps_12", "upps_14", "upps_16", "upps_18", "upps_19", 
+                                "upps_21", "upps_23", "upps_24", "upps_26")
+
+baseline_data$upps_negative_urgency <- rowMeans(baseline_data[, upps_negative_urgency_vars], na.rm=T)
+baseline_data$upps_positive_urgency <- rowMeans(baseline_data[, upps_positive_urgency_vars], na.rm=T)
+
+# hist(baseline_data$upps_negative_urgency)
+# hist(baseline_data$upps_positive_urgency)
+```
+
+
+## Mutating CERQ variables
+
+First check if there are any unanswered items.
+
+```{r}
+cerq_vars <- c("cerq_1", "cerq_2", "cerq_3", "cerq_4", "cerq_5",
+                "cerq_6", "cerq_7", "cerq_8", "cerq_9", "cerq_10",
+               "cerq_11", "cerq_12", "cerq_13", "cerq_14", "cerq_15",
+               "cerq_16", "cerq_17", "cerq_18")
+cerq_NA_values <- 0
+for (name in cerq_vars) {
+  cerq_NA_values = cerq_NA_values + sum(is.na(baseline_data[,name])| 
+                                                baseline_data[,name] == "")
+}
+print(cerq_NA_values)
+```
+
+CERQ items are scored 1-5, with no reversed items. They all have the same descriptors, so we'll write another function.
+
+```{r}
+convert_cerq <- function(cerq_question) {
+  baseline_data <- baseline_data %>%
+    mutate(
+      cerq_question = case_when(
+        cerq_question == "almost never" ~ "1",
+        cerq_question == "sometimes" ~ "2",
+        cerq_question == "frequently" ~ "3",
+        cerq_question == "often" ~ "4",
+        cerq_question == "almost always" ~ "5",
+        cerq_question == "" ~ NA
+      )
+    )
+  baseline_data$cerq_question <- as.integer(baseline_data$cerq_question)
+}
+```
+
+```{r}
+for (name in cerq_vars) {
+  baseline_data[,name] <- convert_cerq(baseline_data[,name])
+}
+```
+
+We will now calculate the CERQ sub-scores using the guide provided by Jonas.
+
+```{r}
+cerq_self_blame_vars <- c("cerq_1", "cerq_2")
+cerq_acceptance_vars <- c("cerq_3", "cerq_4")
+cerq_rumination_vars <- c("cerq_5", "cerq_6")
+cerq_positive_refocusing_vars <- c("cerq_7", "cerq_8")
+cerq_planning_refocusing_vars <- c("cerq_9", "cerq_10")
+cerq_reappraisal_vars <- c("cerq_11", "cerq_12")
+cerq_perspective_vars <- c("cerq_13", "cerq_14")
+cerq_catastrophizing_vars <- c("cerq_15", "cerq_16")
+cerq_blaming_others_vars <- c("cerq_17", "cerq_18")
+
+baseline_data$cerq_self_blame <- rowMeans(baseline_data[, cerq_self_blame_vars], na.rm=T)
+baseline_data$cerq_acceptance <- rowMeans(baseline_data[, cerq_acceptance_vars], na.rm=T)
+baseline_data$cerq_rumination <- rowMeans(baseline_data[, cerq_rumination_vars], na.rm=T)
+baseline_data$cerq_positive_refocusing <- rowMeans(baseline_data[, cerq_positive_refocusing_vars], na.rm=T)
+baseline_data$cerq_planning_refocusing <- rowMeans(baseline_data[, cerq_planning_refocusing_vars], na.rm=T)
+baseline_data$cerq_reappraisal <- rowMeans(baseline_data[, cerq_reappraisal_vars], na.rm=T)
+baseline_data$cerq_perspective <- rowMeans(baseline_data[, cerq_perspective_vars], na.rm=T)
+baseline_data$cerq_catastrophizing <- rowMeans(baseline_data[, cerq_catastrophizing_vars], na.rm=T)
+baseline_data$cerq_blaming_others <- rowMeans(baseline_data[, cerq_blaming_others_vars], na.rm=T)
+
+# hist(baseline_data$cerq_self_blame)
+# hist(baseline_data$cerq_acceptance)
+# hist(baseline_data$cerq_rumination)
+# hist(baseline_data$cerq_positive_refocusing)
+# hist(baseline_data$cerq_planning_refocusing)
+# hist(baseline_data$cerq_reappraisal)
+# hist(baseline_data$cerq_perspective)
+# hist(baseline_data$cerq_catastrophizing)
+# hist(baseline_data$cerq_blaming_others)
+```
+
+## Mutating ERS Data
+
+ERS Questions are scored 0-4, and divided into 3 subscales. There are no reversed items.
+Since the descriptors are all the same, we only need to write one function.
+
+```{r}
+convert_ers <- function(ers_question) {
+  baseline_data <- baseline_data %>%
+    mutate(
+      ers_question = case_when(
+        ers_question == "Not at all like me" ~ "0",
+        ers_question == "A little like me" ~ "1",
+        ers_question == "Somewhat like me" ~ "2",
+        ers_question == "A lot like me" ~ "3",
+        ers_question == "Completley like me" ~ "4",
+        ers_question == "" ~ NA
+      )
+    )
+  baseline_data$ers_question <- as.integer(baseline_data$ers_question)
+}
+```
+
+First check if there are any unanswered items.
+
+```{r}
+ers_vars <- c("ers_1", "ers_2", "ers_3", "ers_4", "ers_5",
+                "ers_6", "ers_7", "ers_8", "ers_9", "ers_10",
+               "ers_11", "ers_12", "ers_13", "ers_14", "ers_15",
+               "ers_16", "ers_17", "ers_18", "ers_19", "ers_20", "ers_21")
+ers_NA_values <- 0
+for (name in ers_vars) {
+  ers_NA_values = ers_NA_values + sum(is.na(baseline_data[,name]))
+}
+print(ers_NA_values)
+```
+
+```{r}
+for (name in ers_vars) {
+  baseline_data[,name] <- convert_ers(baseline_data[,name])
+}
+```
+
+Now we calculate the Persistence, Sensitivity, and Intensity subscore means.
+
+```{r}
+ers_persistence_vars <- c("ers_1", "ers_2", "ers_3", "ers_4")
+ers_sensitivity_vars <- c("ers_5", "ers_6", "ers_7", "ers_8", "ers_9",
+                          "ers_10", "ers_11", "ers_12", "ers_13", "ers_14")
+ers_intensity_vars <- c("ers_15", "ers_16", "ers_17", "ers_18", "ers_19",
+                                "ers_20", "ers_21")
+
+baseline_data$ers_persistence <- rowMeans(baseline_data[, ers_persistence_vars], na.rm=T)
+baseline_data$ers_sensitivity <- rowMeans(baseline_data[, ers_sensitivity_vars], na.rm=T)
+baseline_data$ers_intensity <- rowMeans(baseline_data[, ers_intensity_vars], na.rm=T)
+
+# hist(baseline_data$ers_persistence)
+# hist(baseline_data$ers_sensitivity)
+# hist(baseline_data$ers_intensity)
+```
+
+## Mutating race variables
+
+We would like to create a race variable that combines the 12 options, since this was a select multiple item.
+If they selected one race, it will store that. Otherwise, it will say "multiple".
+
+race_8 and race_12 are popping up with table of extent 0. This is because 
+Jonas already processed this data, and no one selected these options. 
+
+Otherwise, all options have "" or a race, with this order: Hispanic/Latino (1), 
+East Asian (2), Southeast Asian (3), Pacific Islander (4), South Asian (5), 
+American Indian (6), Black/African American (7), Middle Eastern (9),
+White/European American (10), Some other race or ethnicity (11).
+
+We can combine all the races participants selected into one variable using paste.
+
+```{r}
+baseline_data$race <- paste(baseline_data$race_1, baseline_data$race_2,
+                            baseline_data$race_3, baseline_data$race_4,
+                            baseline_data$race_5, baseline_data$race_6,
+                            baseline_data$race_7, baseline_data$race_9, 
+                            baseline_data$race_10, baseline_data$race_11,
+                            sep = "")
+```
+
+We can now rename the overall race variable items. This means if they did not 
+select only a single option, it will automatically go to multiple.
+
+```{r}
+baseline_data <- baseline_data %>%
+    mutate(
+      race = case_when(
+        race == "Black/African American" ~ "african_american",
+        race == "East Asian" ~ "east_asian",
+        race == "Hispanic/Latino" ~ "hispanic",
+        race == "South Asian" ~ "south_asian",
+        race == "Southeast Asian" ~ "southeast_asian",
+        race == "White/European American" ~ "white",
+        race == "Pacific Islander" ~ "pacific_islander",
+        race == "American Indian" ~ "american_indian",
+        race == "Middle Eastern" ~ "middle_eastern",
+        race == "Some other race or ethnicity" ~ "other",
+        TRUE ~ "multiple"
+      )
+    )
+table(baseline_data$race)
+```
+
+We can also rename the individual race variables to make them more descriptive.
+
+```{r}
+baseline_data <- rename(baseline_data, race_hispanic_latino = race_1)
+baseline_data <- rename(baseline_data, race_east_asian = race_2)
+baseline_data <- rename(baseline_data, race_southeast_asian = race_3)
+baseline_data <- rename(baseline_data, race_pacific_islander = race_4)
+baseline_data <- rename(baseline_data, race_south_asian = race_5)
+baseline_data <- rename(baseline_data, race_american_indian = race_6)
+baseline_data <- rename(baseline_data, race_african_american = race_7)
+baseline_data <- rename(baseline_data, race_african = race_8)
+baseline_data <- rename(baseline_data, race_middle_eastern = race_9)
+baseline_data <- rename(baseline_data, race_white = race_10)
+baseline_data <- rename(baseline_data, race_other = race_11)
+baseline_data <- rename(baseline_data, race_no_response = race_12)
+```
+
+
+## Mutating Gender Variables
+
+Gender 5, 7, 8, 10, and 11 had no affirmative responses.
+
+```{r}
+baseline_data$gender <- paste(baseline_data$gender_1, baseline_data$gender_2,
+                            baseline_data$gender_3, baseline_data$gender_4,
+                            baseline_data$gender_6, baseline_data$gender_9,
+                            sep = "")
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+    mutate(
+      gender = case_when(
+        gender == "agender" ~ "agender",
+        gender == "man or male" ~ "man",
+        gender == "transwoman" ~ "trans_woman",
+        gender == "woman or female" ~ "woman",
+        gender == "transman" ~ "trans_man",
+        gender == "non-binary" ~ "non_binary",
+        TRUE ~ "multiple"
+      )
+    )
+table(baseline_data$gender)
+```
+
+We can also rename the individual gender variables to make them more descriptive.
+
+```{r}
+baseline_data <- rename(baseline_data, gender_woman = gender_1)
+baseline_data <- rename(baseline_data, gender_man = gender_2)
+baseline_data <- rename(baseline_data, gender_trans_woman = gender_3)
+baseline_data <- rename(baseline_data, gender_trans_man = gender_4)
+baseline_data <- rename(baseline_data, gender_queer = gender_5)
+baseline_data <- rename(baseline_data, gender_agender = gender_6)
+baseline_data <- rename(baseline_data, gender_fluid = gender_7)
+baseline_data <- rename(baseline_data, gender_intersex = gender_8)
+baseline_data <- rename(baseline_data, gender_non_binary = gender_9)
+baseline_data <- rename(baseline_data, gender_other = gender_10)
+baseline_data <- rename(baseline_data, gender_no_response = gender_11)
+```
+
+## Mutating Sexuality Variable
+
+Sexuality 5 and 9 had no affirmative responses.
+
+```{r}
+baseline_data$sexuality <- paste(baseline_data$sexuality_1, baseline_data$sexuality_2,
+                            baseline_data$sexuality_3, baseline_data$sexuality_4,
+                            baseline_data$sexuality_6, baseline_data$sexuality_7,
+                            baseline_data$sexuality_8, sep = "")
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+    mutate(
+      sexuality = case_when(
+        sexuality == "asexual" ~ "asexual",
+        sexuality == "bisexual" ~ "bisexual",
+        sexuality == "gay" ~ "gay",
+        sexuality == "lesbian" ~ "lesbian",
+        sexuality == "pansexual" ~ "pansexual",
+        sexuality == "straight/heterosexual" ~ "straight",
+        sexuality == "queer" ~ "queer",
+        TRUE ~ "multiple"
+      )
+    )
+table(baseline_data$sexuality)
+```
+
+We can also rename the individual sexuality variables to make them more descriptive.
+
+```{r}
+baseline_data <- rename(baseline_data, sexuality_lesbian = sexuality_1)
+baseline_data <- rename(baseline_data, sexuality_gay = sexuality_2)
+baseline_data <- rename(baseline_data, sexuality_bisexual = sexuality_3)
+baseline_data <- rename(baseline_data, sexuality_queer = sexuality_4)
+baseline_data <- rename(baseline_data, sexuality_two_spirit = sexuality_5)
+baseline_data <- rename(baseline_data, sexuality_straight = sexuality_6)
+baseline_data <- rename(baseline_data, sexuality_pansexual = sexuality_7)
+baseline_data <- rename(baseline_data, sexuality_asexual = sexuality_8)
+baseline_data <- rename(baseline_data, sexuality_no_response = sexuality_9)
+```
+
+## Mutating Random Variables
+
+```{r}
+baseline_data <- baseline_data %>%
+    mutate(
+      education = case_when(
+        education == "associates or technical degree" ~ "associates_degree",
+        education == "bachelor's degree" ~ "bachelors_degree",
+        education == "graduate or professional degree (MA, MS, MBA, PhD, JD, MD, DDS etc.)" ~ "graduate_degree",
+        education == "high school diploma or GED" ~ "high_school",
+        education == "some college, but no degree" ~ "some_college",
+        TRUE ~ NA
+      )
+    )
+```
+
+```{r}
+baseline_data <- baseline_data %>%
+    mutate(
+      employment = case_when(
+        employment == "I'm not working" ~ "unemployed",
+        employment == "I'm working full-time (35 hours or more per week)" ~ "full_time",
+        employment == "I'm working part-time (less than 35 hours per week)" ~ "part_time",
+        TRUE ~ "no_response"
+      )
+    )
+```
+
+Finally, we will replace any remaining empty strings with NA.
+
+```{r}
+baseline_data[baseline_data == ""] <- NA
+baseline_data[baseline_data == "no response"] <- NA
+baseline_data[baseline_data == "no_response"] <- NA
+head(baseline_data)
+```
+
+Now we can save the baseline data as a csv.
+
+```{r}
+write.csv(baseline_data, "baseline_data_processed.csv", row.names = F)
+```
+
+
+
+
+
+
+
+
+
+

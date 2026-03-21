@@ -1,0 +1,707 @@
+---
+title: "k99_survey_data"
+author: "Gavin Kelly"
+date: "2025-06-04"
+output: html_document
+---
+
+This is a data processing script for the k99 survey data.
+
+I first rename all the variables. (lines 43-117)
+
+I then combine the multiple response variables stress event type, motives, 
+expectancies, and social context into one variable each. (lines 139-523)
+
+I then mutate drink count, alc cue, and location variables. (lines 523-593)
+
+I then do some sanity checks and save the csv. (lines 597-699)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+```
+
+## Load Packages
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(tidyr)
+library(psych)
+```
+
+## Loading Data
+
+```{r}
+survey_data <- read.csv("survey_data.csv")
+survey_data_og <- read.csv("survey_data.csv")
+```
+
+## View Variable Names
+
+```{r}
+# colnames(survey_data_og)
+```
+
+## Renaming Variables
+
+```{r}
+survey_data <- rename(survey_data, stress_event = q1StressfulEventResponse)
+
+survey_data <- rename(survey_data, stress_event_type_argument = q2StressfulEventDescriptionoption1Response)
+survey_data <- rename(survey_data, stress_event_type_social_dissapointment = q2StressfulEventDescriptionoption2Response)
+survey_data <- rename(survey_data, stress_event_type_difficulty_work_school = q2StressfulEventDescriptionoption3Response)
+survey_data <- rename(survey_data, stress_event_type_difficulty_home = q2StressfulEventDescriptionoption4Response)
+survey_data <- rename(survey_data, stress_event_type_health_issue = q2StressfulEventDescriptionoption5Response)
+survey_data <- rename(survey_data, stress_event_type_neg_event_to_others = q2StressfulEventDescriptionoption6Response)
+survey_data <- rename(survey_data, stress_event_type_other = q2StressfulEventDescriptionoption7Response)
+
+survey_data <- rename(survey_data, stress_event_intensity = q3StressfulEventRatingResponse)
+
+survey_data <- rename(survey_data, stress_state = q4StressRatingResponse)
+survey_data <- rename(survey_data, PA_state = q5PositivityRatingResponse)
+survey_data <- rename(survey_data, NA_state = q6NegativityRatingResponse)
+
+survey_data <- rename(survey_data, stress_change_alc = q7StressAfterAlcResponse)
+survey_data <- rename(survey_data, stress_change_soft = q8StressAfterSoftResponse)
+
+survey_data <- rename(survey_data, PA_change_alc = q9PositivityAfterAlcResponse)
+survey_data <- rename(survey_data, PA_change_soft = q10PositivityAfterSoftResponse)
+survey_data <- rename(survey_data, NA_change_alc = q11NegativityAfterAlcResponse)
+survey_data <- rename(survey_data, NA_change_soft = q12NegativityAfterSoftResponse)
+
+survey_data <- rename(survey_data, stress_state_change = q13StressChangeResponse)
+survey_data <- rename(survey_data, PA_state_change = q14PositivityChangeResponse)
+survey_data <- rename(survey_data, NA_state_change = q15NegativityChangeResponse)
+
+survey_data <- rename(survey_data, alc_yday = q16AlcYesterdayResponse)
+survey_data <- rename(survey_data, soft_yday = q17SoftYesterdayResponse)
+survey_data <- rename(survey_data, alc_today = q18AlcTodayResponse)
+survey_data <- rename(survey_data, soft_today = q19SoftTodayResponse)
+
+survey_data <- rename(survey_data, alc_intend = q20AlcTodayRemainResponse)
+survey_data <- rename(survey_data, soft_intend = q21SoftTodayRemainResponse)
+
+survey_data <- rename(survey_data, thirst_state = q22ThirstyResponse)
+survey_data <- rename(survey_data, hunger_state = q23HungryResponse)
+survey_data <- rename(survey_data, tired_state = q24TiredResponse)
+survey_data <- rename(survey_data, bored_state = q25BoredResponse)
+
+survey_data <- rename(survey_data, alc_exp_relaxed = q26BehAfterAlcoption1Response)
+survey_data <- rename(survey_data, alc_exp_sociable = q26BehAfterAlcoption2Response)
+survey_data <- rename(survey_data, alc_exp_buzz = q26BehAfterAlcoption3Response)
+survey_data <- rename(survey_data, alc_exp_better_mood = q26BehAfterAlcoption4Response)
+survey_data <- rename(survey_data, alc_exp_energetic = q26BehAfterAlcoption5Response)
+survey_data <- rename(survey_data, alc_exp_hangover = q26BehAfterAlcoption6Response)
+survey_data <- rename(survey_data, alc_exp_embarrassed = q26BehAfterAlcoption7Response)
+survey_data <- rename(survey_data, alc_exp_be_rude = q26BehAfterAlcoption8Response)
+survey_data <- rename(survey_data, alc_exp_nauseous_vomit = q26BehAfterAlcoption9Response)
+survey_data <- rename(survey_data, alc_exp_injury = q26BehAfterAlcoption10Response)
+survey_data <- rename(survey_data, alc_exp_none = q26BehAfterAlcoption11Response)
+
+survey_data <- rename(survey_data, alc_mot_coping = q27StatementsAfterAlcoption1Response)
+survey_data <- rename(survey_data, alc_mot_social = q27StatementsAfterAlcoption2Response)
+survey_data <- rename(survey_data, alc_mot_enhance = q27StatementsAfterAlcoption3Response)
+survey_data <- rename(survey_data, alc_mot_none = q27StatementsAfterAlcoption4Response)
+
+survey_data <- rename(survey_data, alc_craving = q28AlcCravingResponse)
+survey_data <- rename(survey_data, soft_craving = q29SoftCravingResponse)
+
+survey_data <- rename(survey_data, location = q30LocationResponse)
+
+survey_data <- rename(survey_data, social_context_alone = q31Peopleoption1Response)
+survey_data <- rename(survey_data, social_context_friend_roommate = q31Peopleoption2Response)
+survey_data <- rename(survey_data, social_context_romantic_partner = q31Peopleoption3Response)
+survey_data <- rename(survey_data, social_context_family = q31Peopleoption4Response)
+survey_data <- rename(survey_data, social_context_coworker_classmate = q31Peopleoption5Response)
+survey_data <- rename(survey_data, social_context_stranger = q31Peopleoption6Response)
+survey_data <- rename(survey_data, social_context_other = q31Peopleoption7Response)
+
+survey_data <- rename(survey_data, alc_cue = q32AlcNearByResponse)
+survey_data <- rename(survey_data, responsibility = q33ResponsibilitiesResponse)
+```
+
+Now let's look at the data.
+
+```{r}
+# head(survey_data)
+```
+
+Looking at the data, we first need to mutate the variables so the response options
+are Yes/No, and the names are more descriptive, for example:
+stress_event_type_1 -> stress_event_type_argument.
+
+We then need to combine the stress event types into one variable (stress_event_type_overall).
+Same with alcohol expectancies, motives, and social context.
+
+Then we can replace all empty strings with NA.
+
+## Mutating Multiple Response Variables
+
+First we need to combine the select multiple variables.
+
+```{r}
+survey_data$stress_event_type_overall <-   paste(survey_data$stress_event_type_argument, 
+        survey_data$stress_event_type_social_dissapointment,
+        survey_data$stress_event_type_difficulty_work_school, 
+        survey_data$stress_event_type_difficulty_home,
+        survey_data$stress_event_type_health_issue, 
+        survey_data$stress_event_type_neg_event_to_others,
+        survey_data$stress_event_type_other, sep = "")
+```
+
+```{r}
+survey_data$alc_exp_overall <-   paste(survey_data$alc_exp_relaxed, 
+        survey_data$alc_exp_sociable,
+        survey_data$alc_exp_buzz, 
+        survey_data$alc_exp_better_mood,
+        survey_data$alc_exp_energetic, 
+        survey_data$alc_exp_hangover,
+        survey_data$alc_exp_embarrassed,
+        survey_data$alc_exp_be_rude, 
+        survey_data$alc_exp_nauseous_vomit,
+        survey_data$alc_exp_injury, 
+        survey_data$alc_exp_none, sep = "")
+```
+
+```{r}
+survey_data$alc_mot_overall <- paste(survey_data$alc_mot_coping, 
+        survey_data$alc_mot_social,
+        survey_data$alc_mot_enhance, 
+        survey_data$alc_mot_none, sep = "")
+```
+
+```{r}
+survey_data$social_context_overall <-   paste(survey_data$social_context_alone, 
+        survey_data$social_context_friend_roommate,
+        survey_data$social_context_romantic_partner, 
+        survey_data$social_context_family,
+        survey_data$social_context_coworker_classmate, 
+        survey_data$social_context_stranger,
+        survey_data$social_context_other, sep = "")
+```
+
+Now, we can replace non-responses with NA.
+
+```{r}
+survey_data[survey_data == ""] <- NA
+```
+
+## Mutating Stress Event Type Variable
+
+We can also make the overall stress event variable to be individual event/multiple.
+
+```{r}
+survey_data <- survey_data %>%
+    mutate(
+      stress_event_type_overall = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_overall == "Argument, disagreement, or conflict" ~ "argument",
+        stress_event_type_overall == "Social disappointment/let down" ~ "social_dissapointment",
+        stress_event_type_overall == "Difficulties involving work or school" ~ "difficulty_work_school",
+        stress_event_type_overall == "Difficulties at home" ~ "difficulty_home",
+        stress_event_type_overall == "Health issue or accident" ~ "health_issue",
+        stress_event_type_overall == "Negative event that happened to others" ~ "neg_event_to_others",
+        stress_event_type_overall == "Other stressful event" ~ "other",
+        is.na(stress_event_type_overall) ~ NA,
+        TRUE ~ "multiple"
+      )
+    )
+table(survey_data$stress_event_type_overall)
+```
+
+Now we can mutate the stress events to be only Yes or No responses.
+
+```{r}
+stopifnot((survey_data$stress_event_type_argument %in% c("Argument, disagreement, or conflict", NA)))
+stopifnot((survey_data$stress_event_type_social_dissapointment %in% c("Social disappointment/let down", NA)))
+stopifnot((survey_data$stress_event_type_difficulty_work_school %in% c("Difficulties involving work or school", NA)))
+stopifnot((survey_data$stress_event_type_difficulty_home %in% c("Difficulties at home", NA)))
+stopifnot((survey_data$stress_event_type_health_issue %in% c("Health issue or accident", NA)))
+stopifnot((survey_data$stress_event_type_neg_event_to_others %in% c("Negative event that happened to others", NA)))
+stopifnot((survey_data$stress_event_type_other %in% c("Other stressful event", NA)))
+
+survey_data <- survey_data %>%
+    mutate(
+      stress_event_type_argument = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_argument == "Argument, disagreement, or conflict" ~ "Yes",
+        is.na(stress_event_type_overall) ~ NA,
+        is.na(stress_event_type_argument) ~ "No"
+      ),
+      
+      stress_event_type_social_dissapointment = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_social_dissapointment == "Social disappointment/let down" ~ "Yes",
+        is.na(stress_event_type_overall) ~ NA,
+        is.na(stress_event_type_social_dissapointment) ~ "No"
+      ),
+      
+      stress_event_type_difficulty_work_school = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_difficulty_work_school == "Difficulties involving work or school" ~ "Yes",
+        is.na(stress_event_type_overall) ~ NA,
+        is.na(stress_event_type_difficulty_work_school) ~ "No"
+      ),
+      
+      stress_event_type_difficulty_home = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_difficulty_home == "Difficulties at home" ~ "Yes",
+        is.na(stress_event_type_overall) ~ NA,
+        is.na(stress_event_type_difficulty_home) ~ "No"
+      ),
+      
+      stress_event_type_health_issue = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_health_issue == "Health issue or accident" ~ "Yes",
+        is.na(stress_event_type_overall) ~ NA,
+        is.na(stress_event_type_health_issue) ~ "No"
+      ),
+      
+      stress_event_type_neg_event_to_others = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_neg_event_to_others == "Negative event that happened to others" ~ "Yes",
+        is.na(stress_event_type_overall) ~ NA,
+        is.na(stress_event_type_neg_event_to_others) ~ "No"
+      ),
+      
+      stress_event_type_other = case_when(
+        (stress_event == "No" | is.na(stress_event)) ~ NA,
+        stress_event_type_other == "Other stressful event" ~ "Yes",
+        is.na(stress_event_type_overall) ~ NA,
+        is.na(stress_event_type_other) ~ "No"
+      )
+    )
+```
+
+Now the individual stress event responses are Yes/No.
+
+## Mutating Alc Expectancy Variable
+
+We can combine the expectancies into one variable.
+
+```{r}
+survey_data <- survey_data %>%
+    mutate(
+      alc_exp_overall = case_when(
+        alc_exp_overall == "Feel more relaxed" ~ "relaxed",
+        alc_exp_overall == "Be more sociable" ~ "sociable",
+        alc_exp_overall == "Get a buzz" ~ "buzz",
+        alc_exp_overall == "Be in a better mood" ~ "better_mood",
+        alc_exp_overall == "Feel more energetic" ~ "energetic",
+        alc_exp_overall == "Have a hangover" ~ "hangover",
+        alc_exp_overall == "Do something that embarrasses you" ~ "embarrassed",
+        alc_exp_overall == "Be rude or obnoxious" ~ "be_rude",
+        alc_exp_overall == "Feel nauseous or vomit" ~ "nauseous_vomit",
+        alc_exp_overall == "Hurt or injure yourself by accident" ~ "injury",
+        alc_exp_overall == "None of these." ~ "none",
+        is.na(alc_exp_overall) ~ NA,
+        TRUE ~ "multiple"
+      )
+    )
+table(survey_data$alc_exp_overall)
+```
+
+Now we can mutate the individual expectancies variables.
+
+```{r}
+stopifnot((survey_data$alc_exp_relaxed %in% c("Feel more relaxed", NA)))
+stopifnot((survey_data$alc_exp_sociable %in% c("Be more sociable", NA)))
+stopifnot((survey_data$alc_exp_buzz %in% c("Get a buzz", NA)))
+stopifnot((survey_data$alc_exp_better_mood %in% c("Be in a better mood", NA)))
+stopifnot((survey_data$alc_exp_energetic %in% c("Feel more energetic", NA)))
+stopifnot((survey_data$alc_exp_hangover %in% c("Have a hangover", NA)))
+stopifnot((survey_data$alc_exp_embarrassed %in% c("Do something that embarrasses you", NA)))
+stopifnot((survey_data$alc_exp_be_rude %in% c("Be rude or obnoxious", NA)))
+stopifnot((survey_data$alc_exp_nauseous_vomit %in% c("Feel nauseous or vomit", NA)))
+stopifnot((survey_data$alc_exp_injury %in% c("Hurt or injure yourself by accident", NA)))
+stopifnot((survey_data$alc_exp_none %in% c("None of these.", NA)))
+
+survey_data <- survey_data %>%
+    mutate(
+      alc_exp_relaxed = case_when(
+        alc_exp_relaxed == "Feel more relaxed" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_relaxed) ~ "No"
+      ),
+      
+      alc_exp_sociable = case_when(
+        alc_exp_sociable == "Be more sociable" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_sociable) ~ "No"
+      ),
+      
+      alc_exp_buzz = case_when(
+        alc_exp_buzz == "Get a buzz" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_buzz) ~ "No"
+      ),
+      
+      alc_exp_better_mood = case_when(
+        alc_exp_better_mood == "Be in a better mood" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_better_mood) ~ "No"
+      ),
+      
+      alc_exp_energetic = case_when(
+        alc_exp_energetic == "Feel more energetic" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_energetic) ~ "No"
+      ),
+      
+      alc_exp_hangover = case_when(
+        alc_exp_hangover == "Have a hangover" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_hangover) ~ "No"
+      ),
+      
+      alc_exp_embarrassed = case_when(
+        alc_exp_embarrassed == "Do something that embarrasses you" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_embarrassed) ~ "No"
+      ),
+      
+      alc_exp_be_rude = case_when(
+        alc_exp_be_rude == "Be rude or obnoxious" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_be_rude) ~ "No"
+      ),
+      
+      alc_exp_nauseous_vomit = case_when(
+        alc_exp_nauseous_vomit == "Feel nauseous or vomit" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_nauseous_vomit) ~ "No"
+      ),
+      
+      alc_exp_injury = case_when(
+        alc_exp_injury == "Hurt or injure yourself by accident" ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_injury) ~ "No"
+      ),
+      
+      alc_exp_none = case_when(
+        alc_exp_none == "None of these." ~ "Yes",
+        is.na(alc_exp_overall) ~ NA,
+        is.na(alc_exp_none) ~ "No"
+      )
+    )
+```
+
+## Mutating Drinking Motives Variable
+
+We can combine motives into one variable.
+
+```{r}
+survey_data <- survey_data %>%
+    mutate(
+      alc_mot_overall = case_when(
+        alc_mot_overall == "You would drink to forget your worries or problems." ~ "coping",
+        alc_mot_overall == "You would drink to celebrate a special occasion with friends." ~ "social",
+        alc_mot_overall == "You would drink because you like the feeling." ~ "enhance",
+        alc_mot_overall == "None of these." ~ "none",
+        is.na(alc_mot_overall) ~ NA,
+        TRUE ~ "multiple"
+      )
+    )
+table(survey_data$alc_mot_overall)
+```
+
+Now we can mutate the individual motives variables.
+
+```{r}
+stopifnot((survey_data$alc_mot_coping %in% c("You would drink to forget your worries or problems.", NA)))
+stopifnot((survey_data$alc_mot_social %in% c("You would drink to celebrate a special occasion with friends.", NA)))
+stopifnot((survey_data$alc_mot_enhance %in% c("You would drink because you like the feeling.", NA)))
+stopifnot((survey_data$alc_mot_none %in% c("None of these.", NA)))
+
+survey_data <- survey_data %>%
+    mutate(
+      alc_mot_coping = case_when(
+        alc_mot_coping == "You would drink to forget your worries or problems." ~ "Yes",
+        is.na(alc_mot_overall) ~ NA,
+        is.na(alc_mot_coping) ~ "No"
+      ),
+      
+      alc_mot_social = case_when(
+        alc_mot_social == "You would drink to celebrate a special occasion with friends." ~ "Yes",
+        is.na(alc_mot_overall) ~ NA,
+        is.na(alc_mot_social) ~ "No"
+      ),
+      
+      alc_mot_enhance = case_when(
+        alc_mot_enhance == "You would drink because you like the feeling." ~ "Yes",
+        is.na(alc_mot_overall) ~ NA,
+        is.na(alc_mot_enhance) ~ "No"
+      ),
+      
+      alc_mot_none = case_when(
+        alc_mot_none == "None of these." ~ "Yes",
+        is.na(alc_mot_overall) ~ NA,
+        is.na(alc_mot_none) ~ "No"
+      )
+    )
+```
+
+## Mutating Social Company Variable
+
+We can combine social company into one variable.
+
+```{r}
+survey_data <- survey_data %>%
+    mutate(
+      social_context_overall = case_when(
+        social_context_overall == "No one (I am alone)" ~ "alone",
+        social_context_overall == "Friend(s)/Roommate(s)" ~ "friend_roommate",
+        social_context_overall == "Romantic partner(s)" ~ "romantic_partner",
+        social_context_overall == "Family member(s)" ~ "family",
+        social_context_overall == "Coworker(s)/Classmate(s)" ~ "coworker_classmate",
+        social_context_overall == "Stranger(s)" ~ "stranger",
+        social_context_overall == "Other" ~ "other",
+        is.na(social_context_overall) ~ NA,
+        TRUE ~ "multiple"
+      )
+    )
+table(survey_data$social_context_overall)
+```
+
+Now we can mutate the individual variables.
+
+```{r}
+stopifnot((survey_data$social_context_alone %in% c("No one (I am alone)", NA)))
+stopifnot((survey_data$social_context_friend_roommate %in% c("Friend(s)/Roommate(s)", NA)))
+stopifnot((survey_data$social_context_romantic_partner %in% c("Romantic partner(s)", NA)))
+stopifnot((survey_data$social_context_family %in% c("Family member(s)", NA)))
+stopifnot((survey_data$social_context_coworker_classmate %in% c("Coworker(s)/Classmate(s)", NA)))
+stopifnot((survey_data$social_context_stranger %in% c("Stranger(s)", NA)))
+stopifnot((survey_data$social_context_other %in% c("Other", NA)))
+
+
+survey_data <- survey_data %>%
+    mutate(
+      social_context_alone = case_when(
+        social_context_alone == "No one (I am alone)" ~ "Yes",
+        is.na(social_context_overall) ~ NA,
+        is.na(social_context_alone) ~ "No"
+      ),
+      
+      social_context_friend_roommate = case_when(
+        social_context_friend_roommate == "Friend(s)/Roommate(s)" ~ "Yes",
+        is.na(social_context_overall) ~ NA,
+        is.na(social_context_friend_roommate) ~ "No"
+      ),
+      
+      social_context_romantic_partner = case_when(
+        social_context_romantic_partner == "Romantic partner(s)" ~ "Yes",
+        is.na(social_context_overall) ~ NA,
+        is.na(social_context_romantic_partner) ~ "No"
+      ),
+      
+      social_context_family = case_when(
+        social_context_family == "Family member(s)" ~ "Yes",
+        is.na(social_context_overall) ~ NA,
+        is.na(social_context_family) ~ "No"
+      ),
+      
+      social_context_coworker_classmate = case_when(
+        social_context_coworker_classmate == "Coworker(s)/Classmate(s)" ~ "Yes",
+        is.na(social_context_overall) ~ NA,
+        is.na(social_context_coworker_classmate) ~ "No"
+      ),
+      
+      social_context_stranger = case_when(
+        social_context_stranger == "Stranger(s)" ~ "Yes",
+        is.na(social_context_overall) ~ NA,
+        is.na(social_context_stranger) ~ "No"
+      ),
+      
+      social_context_other = case_when(
+        social_context_other == "Other" ~ "Yes",
+        is.na(social_context_overall) ~ NA,
+        is.na(social_context_other) ~ "No"
+      )
+    )
+```
+
+## Mutating Number of Drink Variables
+
+The number of drinks should be from 0-10. I checked and only alc_yday and soft_yday 
+have 10+ recorded, so I will fix those.
+
+```{r}
+survey_data <- survey_data %>%
+  mutate(
+    alc_yday = case_when(
+      alc_yday == "10+" ~ "10",
+      TRUE ~ alc_yday
+    ),
+    
+    soft_yday = case_when(
+      soft_yday == "10+" ~ "10",
+      TRUE ~ soft_yday
+    ),
+    
+    alc_yday = as.integer(alc_yday),
+    soft_yday = as.integer(soft_yday),
+    alc_today = as.integer(alc_today),
+    soft_today = as.integer(soft_today),
+    alc_intend = as.integer(alc_intend),
+    soft_intend = as.integer(soft_intend)
+  )
+```
+
+## Mutating Alc Cue Variable
+
+```{r}
+survey_data <- survey_data %>%
+  mutate(
+    alc_cue = case_when(
+      alc_cue == "Alcohol is visible directly (bottle, glass, etc.)" ~ "directly_visible",
+      alc_cue == "Alcohol is visible indirectly (TV, magazine, etc.)" ~ "indirectly_visible",
+      alc_cue == "No alcohol is visible" ~ "none"
+    )
+  )
+stopifnot(survey_data$alc_cue %in% c(
+  "directly_visible",
+  "indirectly_visible",
+  "none",
+  NA
+))
+```
+
+
+## Mutating location variable
+
+```{r}
+survey_data <- survey_data %>%
+  mutate(
+    location = case_when(
+      location == "School/work" ~ "school_work",
+      location == "Home" ~ "home",
+      location == "Someone else’s home" ~ "someone_elses_home",
+      location == "Restaurant/café" ~ "restaurant_cafe",
+      location == "Outdoors" ~ "outdoors",
+      location == "Other location" ~ "other",
+      location == "Bar/club" ~ "bar_club",
+      NA ~ NA
+    )
+  )
+stopifnot(survey_data$location %in% c("school_work", "home", "someone_elses_home",
+                              "outdoors", "other", "bar_club", "restaurant_cafe", NA))
+head(survey_data)
+```
+
+## Sanity Checks for Categorical Variables
+
+There are 0 NA responses for stress_event. There are the same # of Nos for this
+variable as NAs for all the stress event specific variables. 
+
+I checked the values of each variable as well, and they all look good. 
+As the values for session increase, they are decreasing in frequency.
+
+## Sanity Checks for Numeric Variables
+
+We need to check these numeric variables: subject, session, stress_event_intensity,
+stress_state, PA_state, NA_state, stress_change_alc, stress_change_soft, PA_change_alc,
+PA_change_soft, NA_change_alc, NA_change_soft, stress_change, PA_change, NA_change,
+alc_yday, soft_yday, alc_today, soft_today, alc_intend, soft_intend, thirst_state,
+hunger_state, tired_state, bored_state, alc_craving, soft_craving.
+
+```{r}
+### subject and session
+
+stopifnot(survey_data$subject %in% c(1:250))
+stopifnot(survey_data$session %in% c(1:45))
+
+### state ratings
+
+stopifnot(survey_data$stress_event_intensity %in% c(0:4) | 
+            is.na(survey_data$stress_event_intensity))
+stopifnot(survey_data$stress_state %in% c(0:4) | 
+            is.na(survey_data$stress_state))
+stopifnot(survey_data$PA_state %in% c(0:4) | 
+            is.na(survey_data$PA_state))
+stopifnot(survey_data$NA_state %in% c(0:4) | 
+            is.na(survey_data$NA_state))
+
+### stress change after drink
+
+stopifnot(survey_data$stress_change_alc %in% c(-2:2) | 
+            is.na(survey_data$stress_change_alc))
+stopifnot(survey_data$stress_change_soft %in% c(-2:2) | 
+            is.na(survey_data$stress_change_soft))
+
+### PA change after drink
+
+stopifnot(survey_data$PA_change_alc %in% c(-2:2) | 
+            is.na(survey_data$PA_change_alc))
+stopifnot(survey_data$PA_change_soft %in% c(-2:2) | 
+            is.na(survey_data$PA_change_soft))
+
+### NA change after drink
+
+stopifnot(survey_data$NA_change_alc %in% c(-2:2) | 
+            is.na(survey_data$NA_change_alc))
+stopifnot(survey_data$NA_change_soft %in% c(-2:2) | 
+            is.na(survey_data$NA_change_soft))
+
+### general emotion changes
+
+stopifnot(survey_data$stress_state_change %in% c(-2:2) | 
+            is.na(survey_data$stress_state_change))
+stopifnot(survey_data$PA_state_change %in% c(-2:2) | 
+            is.na(survey_data$PA_state_change))
+stopifnot(survey_data$NA_state_change %in% c(-2:2) | 
+            is.na(survey_data$NA_state_change))
+
+### drink amounts
+
+stopifnot(survey_data$alc_yday %in% c(0:10) | 
+            is.na(survey_data$alc_yday))
+stopifnot(survey_data$soft_yday %in% c(0:10) | 
+            is.na(survey_data$soft_yday))
+stopifnot(survey_data$alc_today %in% c(0:10) | 
+            is.na(survey_data$alc_today))
+stopifnot(survey_data$soft_today %in% c(0:10) | 
+            is.na(survey_data$soft_today))
+stopifnot(survey_data$alc_intend %in% c(0:10) | 
+            is.na(survey_data$alc_intend))
+stopifnot(survey_data$soft_intend %in% c(0:10) | 
+            is.na(survey_data$soft_intend))
+
+### physical states
+
+stopifnot(survey_data$thirst_state %in% c(0:4) | 
+            is.na(survey_data$thirst_state))
+stopifnot(survey_data$hunger_state %in% c(0:4) | 
+            is.na(survey_data$hunger_state))
+stopifnot(survey_data$tired_state %in% c(0:4) | 
+            is.na(survey_data$tired_state))
+stopifnot(survey_data$bored_state %in% c(0:4) | 
+            is.na(survey_data$bored_state))
+
+### craving 
+
+stopifnot(survey_data$alc_craving %in% c(0:4) | 
+            is.na(survey_data$alc_craving))
+stopifnot(survey_data$soft_craving %in% c(0:4) | 
+            is.na(survey_data$soft_craving))
+```
+
+
+Now we can save the survey data as a csv.
+
+```{r}
+write.csv(survey_data, "survey_data_processed.csv", row.names = F)
+```
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,257 @@
+---
+title: "k99_data_exploration"
+author: "Gavin Kelly"
+date: "2025-07-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+library(dplyr)
+library(psych)
+library(interactions)
+library(ggplot2)
+# k99_shared_data <- read.csv("k99_shared_data.csv")
+```
+
+```{r}
+k99_shared_data_2 <- k99_shared_data %>%
+  group_by(subject, session) %>%
+  mutate(
+    mean_prop_alc_responses = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    mean_median_rt = median(rt, na.rm = T),
+    alc_consumed = case_when(alc_today > 0 ~ 1,
+                             TRUE ~ 0)
+  ) %>%
+    slice(1) %>%
+  ungroup()
+summary(lm(mean_prop_alc_responses ~ alc_consumed, data = k99_shared_data_2))
+t.test(mean_prop_alc_responses ~ alc_consumed, data = k99_shared_data_2)
+```
+
+
+UPPS urgency - does it predict whether you drink, how much you drink, and prop alc?
+
+```{r}
+k99_shared_data_3 <- k99_shared_data_2 %>%
+  group_by(subject) %>%
+  mutate(prop_consumed = mean(alc_consumed, na.rm=T),
+         average_consume = mean(alc_today, na.rm=T),
+         average_prop_alc = mean(prop_alc_responses, na.rm = T)) %>%
+  slice(1)
+```
+
+
+```{r}
+#on the subject level, positive urgency seems to have no association with drinking
+summary(lm(prop_consumed ~ upps_positive_urgency, data = k99_shared_data_3))
+summary(lm(average_prop_alc ~ upps_negative_urgency, data = k99_shared_data_3))
+```
+
+```{r}
+#negative urgency has no association with drinking or amount
+summary(lm(prop_consumed ~ upps_negative_urgency, data = k99_shared_data_3))
+summary(lm(average_consume ~ upps_negative_urgency, data = k99_shared_data_3))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+How is NA state associated with drinking and prop responses?
+
+Let's also create a time-lagged alc consumption variable to check this.
+
+```{r}
+# We see an association here with drinking and prop alc responses
+# as NA state increases, drinking decreases
+# however, the proportion of responses indicating preference to drink increases.
+modTA <- lm(alc_today ~  NA_state, data = k99_dat_4)
+summary(lm(alc_consumed ~ NA_state, data = k99_shared_data_2))
+summary(lm(prop_alc_responses ~ NA_state, data = k99_shared_data_2))
+summary(lm(alc_intend ~ NA_state, data = k99_shared_data_2))
+```
+
+```{r}
+ggplot(k99_dat_4, aes(x = NA_state, y = alc_today)) + geom_jitter() +
+  geom_smooth(method="lm")
+```
+
+
+```{r}
+# PA is more important for high urgency people
+modTPA <- lm(alc_today ~ PA_state * upps_positive_urgency, data = k99_dat_4)
+probe_interaction(modTPA, pred = 'PA_state', modx = 'upps_positive_urgency')
+
+# it seems people with high urgency are more effected by positive emotions.
+# however, interestingly they have a bit lower likelihood to start drinking.
+# It seems like people with high urgency need to be happy to drink, otherwise they wont.
+# Further, they drink more than others when they are happy, and less than others when not.
+modCPA <- lm(alc_consumed ~ upps_positive_urgency * PA_state, data = k99_shared_data_2)
+probe_interaction(modCPA, pred = 'upps_positive_urgency', modx = 'PA_state')
+# I think it's interesting that low urgency seems to have such an effect on the
+# effect of PA on drinking, seems to show some good support for the theory.
+
+# people low in urgency choose less alc when happy, but people high in urgency choose more
+# i think its the same interaction but a different main effect
+modPPA <- lm(prop_alc_responses ~ upps_positive_urgency * PA_state, data = k99_shared_data_2)
+probe_interaction(modPPA, pred = 'upps_positive_urgency', modx = 'PA_state')
+# It seems the (subconscious) perceived effect of positive emotion on alcohol use
+# is more negative than the actual effect
+```
+
+```{r}
+# let's see about only days when drinking occurs
+k99_dat_4 <- k99_shared_data_2 %>% filter(alc_today >0)
+modTPA <- lm(alc_today ~ upps_positive_urgency * PA_state, data = k99_dat_4)
+probe_interaction(modTPA, pred = 'upps_positive_urgency', modx = 'PA_state')
+# we see that people high in urgency drink a lot more
+# their drinking also depends on their mood more.
+# so there is main effect of urgency, as well as an interaction.
+```
+
+
+
+```{r}
+modCNA <- lm(alc_consumed ~ upps_negative_urgency * stress_state, data = k99_shared_data_2)
+probe_interaction(modCNA, pred = 'upps_negative_urgency', modx = 'stress_state')
+summary(modCNA)
+#it appears that when low in negative urgency, stress has a greater effect
+# this is interestingly the opposite as we saw with positive urgency
+
+#it seems stress impacts the likelihood to start drinking, while urgency impact amount
+```
+```{r}
+modTNA <- lm(alc_today ~ stress_state * upps_negative_urgency, data = k99_dat_4)
+probe_interaction(modTNA, pred = 'upps_negative_urgency', modx = 'stress_state')
+summary(modTNA)
+#stress increased drinking for people with low urgency, but decreases for people with high urgency
+```
+
+```{r}
+modPNA <- lm(prop_alc_responses ~ upps_negative_urgency * stress_state, data = k99_shared_data_2)
+probe_interaction(modPNA, pred = 'upps_negative_urgency', modx = 'stress_state')
+# we just see a main effect of stress increasing drink choices
+# while high urgency people still choose more, there is a reversed pattern.
+# people experiencing NA want to drink more, but actually do it less.
+# low NA may be seen as more neutral, or open to anything.
+# they dont choose alcohol as much, but do end up drinking more.
+# stress also seems to have a greater positive effect on people with low urgency
+# on drinking days
+# this may just show that people's perceptions of their behavior is very different from reality
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+How do drinking motives predict momentary drinking and choices, and compare to baseline motives?
+
+The only association between baseline motives and drinking behavior is coping increasing
+average consumption. there is also coping and enhancement associated with alc choices.
+
+It seems like there is not much association between drinking and motives.
+However, there does seem to be a strong association with prop responses and momentary
+enhancement and coping motives, both increasing choices.
+
+The interaction between enhancement * PA_state and choices is also significant.
+
+do baseline motives only matter based on a certain thing in the moment?
+
+```{r}
+summary(lm(average_prop_alc ~ dmq_social, data = k99_shared_data_3))
+summary(lm(average_consume ~ dmq_enhancement, data = k99_shared_data_3))
+```
+
+# Coping motives associated with prop choices for alcohol, and drinks when you do drink
+It is possible that this is a bias when people drink, they think now they have
+higher coping motives. Maybe coping motives is somehow an outcome of drinking.
+This may be supported by alc_intend being significant with coping motives.
+There is only an interaction of prop choices for alcohol.
+
+coping motives appear to be more associated with alc responses and intentions
+than drinks already consumed. Could be worth doing a time lag to see motives from 
+the day before, and how that predicts drinking behavior.
+
+```{r}
+summary(lm(alc_today ~  alc_mot_conform, data = k99_shared_data_2))
+summary(lm(prop_alc_responses ~ alc_mot_coping * NA_state, data = k99_shared_data_2))
+```
+
+```{r}
+#very small effects of enhancement
+#it seems like baseline scores only matter when they are experiencing the given motive
+#decent effects of social
+#main effect of coping - increases drink amount
+modTE <- lm(alc_today ~ alc_mot_coping * dmq_coping, data = k99_shared_data_2)
+probe_interaction(modTE, pred = 'alc_mot_coping', modx = 'dmq_coping')
+```
+
+```{r}
+#main effect coping
+#main effect of enhancement decreasing likelihood of drinking - prob insignificant
+#interaction of social increasing likelihood
+modTE <- lm(alc_consumed ~ alc_mot_social * dmq_social, data = k99_shared_data_2)
+probe_interaction(modTE, pred = 'alc_mot_social', modx = 'dmq_social')
+```
+
+
+
+
+
+Craving...
+
+is positively associated with intentions to drink.
+
+```{r}
+cor.test(k99_shared_data_2$alc_craving, k99_shared_data_2$alc_intend)
+```
+
+These correlations show that the prop alc responses capture these variables pretty well.
+
+```{r}
+cor_df <- k99_shared_data_2[c("alc_craving", "prop_alc_responses", 
+                               "alc_intend", "PA_change_alc",
+                              "NA_change_alc", "stress_change_alc")]
+cor_matrix2 <- cor_df %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  round(., 2)
+cor_matrix2
+summary(lm(alc_craving ~ prop_alc_responses + alc_intend + PA_change_alc +
+stress_change_alc + alc_exp_better_mood + alc_exp_relaxed, data = k99_shared_data_2))
+```
+
+
+
+
+

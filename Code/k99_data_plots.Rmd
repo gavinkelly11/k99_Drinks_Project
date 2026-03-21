@@ -1,0 +1,1674 @@
+---
+title: "k99_data_plots"
+author: "Gavin Kelly"
+date: "2025-06-06"
+output: html_document
+---
+
+This is a script for the data plots for the k99.2 EMA study.
+
+# Description of Plots
+
+  *With extra things to know about each*
+
+Figure 1 (line 158): This plots race (barplot), audit scores(raincloud plot), 
+age (raincloud plot), and drinking motives (histogram-raincloud plot) from the baseline data.
+
+  I create a raincloud plot function here that I use throughout the rest of the script.
+
+Figure 2 (line 371): This is a heatmap of the correlations of important study variables
+within each participant. It plots average emotions from EMA assessments. The 6 variables
+of interest from the 2AFC: choices for alcohol (%), median response times,
+and DDM parameters from the 2AFC sessions. These are also averaged for each
+participant. It also plots drinking motives from the baseline.
+  
+  This loosely follows this tutorial.
+  https://www.geeksforgeeks.org/create-heatmap-in-r-using-ggplot2/
+  upper.tri deletes the top half of the correlation matrix.
+
+Figure 3 (line 493): This is a plot ranking the baseline ratings of alcoholic and 
+non-alcoholic drinks using SEM bars with jittered points behind. This section 
+includes two plot options, one with brand names and one with generic names.
+
+  This one just has a lot of formatting and renaming drinks.
+
+Figure 4 (line 788): This combines a barplot of stress event (yes/no), a bar plot
+of type of stress event, and a histogram-raincloud plot of stress intensity ratings.
+
+Figure 5 (line 923): This creates histogram-raincloud plots for the three emotions 
+from the EMA assessments (Stress, NA, and PA).
+
+  I use fct_relevel here to avoid using facet_wrap.
+
+Figure 6 (line 983): This figure combines raincloud plots of the 6 variables of 
+interest from the 2AFC.
+
+Figure 7 (line 1091): The figure plots the relationship between the value function
+and the choices for alcohol (%) and median rt. This plots the data by SESSION,
+so each data point is one session from one participant.
+
+  I create a plot_value function here that uses group = interaction to ensure 
+  there is one data point for each subject session combination.
+
+Figure 8 (line 1179): This plots the 6 variables of interest by stress event (yes/no). 
+The points for each session are jittered behind.
+
+Figure 9 (line 1299): This creates 3 figures actually, one for each emotion (stress, NA, PA).
+Each figure plots the relationship between emotions from assessments and the
+6 variables of interest.
+
+Figure 10 (line 1596): This plots the number of each responses for each day in the 
+EMA period, measured by days since the baseline was completed.
+
+  I create a new df here with the desired variables, and update sessions 1, 2, 3
+  based on the number of completions they had that day.
+
+# Other things to know about the code:
+
+I have commented out user-specific code like working directory, loading data,
+and saving the plots using ggsave.
+
+Feel free to save individual plots using ggsave rather than the combined figures.
+
+Each plot should print when the code is run, but some will look weird before they
+are reformatted and saved to files. The formatting in the commented code is good.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+```
+
+## Load Packages
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(tidyr)
+library(psych)
+library(ggrain)
+library(gghalves)
+library(ggdist)
+library(ggridges)
+library(forcats)
+library(reshape2)
+library(cowplot)
+library(ggpubr)
+```
+
+
+## Loading Data
+
+```{r}
+# k99_shared_data <- read.csv("k99_shared_data.csv")
+```
+
+We can create data frames on the baseline and EMA assessment level.
+
+```{r}
+baseline_data_processed <- k99_shared_data %>%
+  group_by(subject) %>%
+  slice(1) %>%
+  ungroup()
+  
+survey_data_processed %>% 
+  group_by(subject, session) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+
+
+
+
+
+
+## Figure 1: Descriptive Statistics
+
+We can make a raincloud plot of the audit scores.
+
+First we write a function for the raincloud plot. 
+
+```{r}
+plot_rc <- function(df, xvar, hex_code, adj, ht1, just, nudge, alp, sz, ht2) {
+  ggplot(df, aes(x = xvar, y = "", fill = hex_code, color = hex_code)) +
+  ggdist::stat_halfeye(point_colour = NA,
+                         adjust = adj,
+                         width = .5,
+                          height = ht1,
+                         .width = 0,            
+                         justification = just) +
+  geom_boxplot(width = .1, alpha = .5, lwd = 1, fatten = 1.5, outlier.shape = NA,
+                          size = 1.15, position = position_nudge(y = nudge)) +
+  geom_jitter(aes(color = hex_code), alpha = alp, size = sz, height = ht2) +
+  coord_flip() +
+  theme_cowplot() +
+  scale_fill_manual(values = hex_code) +
+  scale_color_manual(values = hex_code) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 18),
+      axis.title.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_x_continuous()
+}
+```
+
+```{r}
+audit_raincloud_plot <- plot_rc(baseline_data_processed, baseline_data_processed$audit_score, "black",
+                                .6, .5, -.6, -.22, .15, .8, .05)
+audit_raincloud_plot + labs(title = "", x = "Audit Score", y = "") + 
+  scale_x_continuous(breaks = seq(0, 40, by = 5))
+```
+
+
+We can also make raincloud plots of the drinking motives variables. For this,
+we need to pivot longer, creating one variable for all the motives.
+
+The conformity motives are extremely one-inflated, so we will randomize some of these
+values to be between 1 and 1.1.
+
+```{r}
+motives_items <- c("dmq_social", "dmq_enhancement", "dmq_coping", "dmq_conformity")
+baseline_long_mot <- pivot_longer(baseline_data_processed, cols = all_of(motives_items),
+                              names_to = "motive", values_to = "score")
+baseline_long_mot <- baseline_long_mot %>%
+  mutate(
+    motive = case_when(
+      motive == "dmq_social" ~ "Social Motives",
+      motive == "dmq_enhancement" ~ "Enhancement Motives",
+      motive == "dmq_coping" ~ "Coping Motives",
+      motive == "dmq_conformity" ~ "Conformity Motives"
+    )
+  )
+```
+
+
+```{r}
+colors <- c("#2C6E49", "#52796f", "#68a691", "#77ba8b")
+motives_raincloud_plot <- ggplot(baseline_long_mot, aes(x = score, y = motive,
+                                                        fill = motive, color = motive)) +
+  facet_wrap(~ fct_rev(motive), scales = "free_x", nrow = 1) +
+  ggridges::stat_binline(bins = 5, breaks = c(.95, 1.77, 2.59, 3.41, 4.23, 5.05), 
+                         scale = 0.3, alpha = 0.5, lwd = 1, fatten = 1.5,
+                         position = position_nudge(y = 0.15), draw_baseline = F, pad = F) +
+  geom_boxplot(width = .1, alpha = .5, lwd = 1, fatten = 1.5, outlier.shape = NA,
+                          size = 1.15, position = position_nudge(y = -0.22)) +
+  geom_jitter(aes(color = motive), alpha = 0.3, size = 0.8, height = 0.05) +
+  coord_flip() +
+  theme_cowplot() +
+  scale_fill_manual(values = colors) +
+  scale_color_manual(values = colors) +
+    theme(
+      strip.text = element_text(size = 18, face = "bold"),
+      legend.position = "none",
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  labs(title = "", x = "DMQ Score", y = "") +
+  scale_x_continuous(breaks = seq(1, 5, by = 1))
+motives_raincloud_plot
+```
+
+We can also make a raincloud plot for the age scores.
+
+```{r}
+age_raincloud_plot <- plot_rc(baseline_data_processed, baseline_data_processed$age, "#1d5234",
+                                .6, .5, -.6, -.22, .15, .8, .05)
+age_raincloud_plot + labs(title = "", x = "Age", y = "") + 
+  scale_x_continuous(breaks = c(21, 30, 40, 50, 60, 70, 80))
+```
+
+We can now make some bar charts for the categorical demographic variables.
+
+I would like put race, gender, and sexuality on one plot, sorted by frequency.
+
+```{r}
+demographic_items <- c("race", "gender", "sexuality")
+baseline_long_demo <- pivot_longer(baseline_data_processed, cols = all_of(demographic_items),
+                              names_to = "demographic", values_to = "response")
+
+baseline_long_demo <- baseline_long_demo %>%
+  mutate(
+    response = case_when(
+      response == "straight" ~ "Straight",
+      response == "white" ~ "White",
+      response == "woman" ~ "Woman",
+      response == "man" ~ "Man",
+      (response == "multiple" & demographic == "sexuality") ~ "LGBQ+",
+      (response == "multiple" & demographic == "gender") ~ "Other",
+      (response == "multiple" & demographic == "race") ~ "Other/Multiple",
+      response == "bisexual" ~ "LGBQ+",
+      response == "african_american" ~ "Black/African American",
+      response == "gay" ~ "LGBQ+",
+      response == "hispanic" ~ "Hispanic/Latinx",
+      response == "southeast_asian" ~ "Asian",
+      response == "east_asian" ~ "Asian",
+      response == "pansexual" ~ "LGBQ+",
+      response == "south_asian" ~ "Asian",
+      response == "agender" ~ "Other",
+      response == "asexual" ~ "LGBQ+",
+      response == "lesbian" ~ "LGBQ+",
+      response == "queer" ~ "LGBQ+",
+      response == "trans_woman" ~ "Other",
+      TRUE ~ response
+    )
+  )
+baseline_long_demo <- baseline_long_demo %>%
+  mutate(
+    demographic = case_when(
+      demographic == "race" ~ "Race/Ethnicity",
+      demographic == "gender" ~ "Gender",
+      demographic == "sexuality" ~ "Sexuality",
+    )
+  )
+desired_order <- c("Woman", "Man", "Other",
+  "Asian", "Black/African American", "White", "Other/Multiple", "Hispanic/Latinx",
+  "Straight", "LGBQ+")
+baseline_long_demo <- baseline_long_demo %>%
+  mutate(response = factor(response, levels = desired_order))
+```
+
+
+```{r}
+colors <- c("#709775", "#415d43", "#8fb996")
+demographics_barplot <- ggplot(baseline_long_demo, aes(x = response, group = demographic,
+                                                fill = demographic, color = demographic)) +
+  geom_bar() +
+  facet_wrap(~demographic, scales = "free_x", nrow = 1) +
+  theme_cowplot() +
+  scale_fill_manual(values = colors) +
+  scale_color_manual(values = colors) +
+    theme(
+      legend.position = "none",
+      strip.text = element_text(size = 21, face = "bold"),
+      axis.text.x = element_text(
+          angle = 45, 
+          vjust = 1, 
+          hjust = 1, 
+          size = 16),
+      axis.title.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 21)
+    ) +
+    ylim(0, 210) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(title = "", x = "Demographic", y = "Count")
+demographics_barplot
+```
+
+
+
+
+
+Now we can save all of the demographic plots together using ggarrange.
+
+```{r}
+# figure1 <- ggpubr::ggarrange(
+#   age_raincloud_plot, demographics_barplot, audit_raincloud_plot, motives_raincloud_plot,
+#   ncol = 2, 
+#   nrow = 2,
+#   widths = c(1, 3),
+#   labels = c("A", "B", "C", "D"),
+#   font.label = list(size = 22, face = "bold"), # Optional formatting
+#   label.x = 0,
+#   label.y = 1 
+# )
+# figure1
+# ggsave("figure1.jpg", figure1, width = 18, height = 15, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+## Figure 2: Heat Map of Participant Characteristics
+
+We need to make a new DF with only our target variables
+
+  baseline scales: audit & dmq scores
+  ema vals: mean stress, na, pa state, prop of choices for alcohol, median rt
+
+First we calculate the means for participant characteristics in the EMA surveys.
+
+```{r}
+k99_shared_data_2 <- k99_shared_data %>%
+  group_by(subject, session) %>%
+  mutate(
+    mean_prop_alc_responses = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    mean_median_rt = median(rt, na.rm = T)
+  ) %>%
+    slice(1) %>%
+  ungroup()
+k99_shared_data_2 <- k99_shared_data_2 %>%
+  group_by(subject) %>%
+  mutate(
+    mean_stress_state = mean(stress_state, na.rm = T),
+    mean_NA_state = mean(NA_state, na.rm = T),
+    mean_PA_state = mean(PA_state, na.rm = T),
+    mean_prop_alc_responses = mean(mean_prop_alc_responses),
+    mean_median_rt = mean(mean_median_rt)
+  ) %>%
+  slice(1)
+```
+
+Now we add these variables along with the baseline variables into a new df.
+
+```{r}
+cor_df <- k99_shared_data_2[c("mean_stress_state", "mean_NA_state", "mean_PA_state",
+                            "mean_prop_alc_responses", "mean_median_rt", 
+                            "B", "drift", "alcbias", "nondectime", "audit_score",
+                            "dmq_social", "dmq_enhancement", "dmq_coping", "dmq_conformity")]
+head(cor_df)
+cor_df <- rename(cor_df, "Average Stress" = mean_stress_state)
+cor_df <- rename(cor_df, "Average Negative Affect" = mean_NA_state)
+cor_df <- rename(cor_df, "Average Positive Affect" = mean_PA_state)
+cor_df <- rename(cor_df, "Avg. Choices for Alcohol (%)" = mean_prop_alc_responses)
+cor_df <- rename(cor_df, "Median Response Time" = mean_median_rt)
+
+cor_df <- rename(cor_df, "Drift Rate" = drift)
+cor_df <- rename(cor_df, "Alcohol Bias" = alcbias)
+cor_df <- rename(cor_df, "Decision Boundary" = B)
+cor_df <- rename(cor_df, "Non-Decision Time" = nondectime)
+
+cor_df <- rename(cor_df, "Audit Score" = audit_score)
+cor_df <- rename(cor_df, "Social Motives" = dmq_social)
+cor_df <- rename(cor_df, "Coping Motives" = dmq_coping)
+cor_df <- rename(cor_df, "Enhancement Motives" = dmq_enhancement)
+cor_df <- rename(cor_df, "Conformity Motives" = dmq_conformity)
+
+#cor_df <- distinct(cor_df)
+head(cor_df)
+#cor_matrix <- cor(cor_df[sapply(cor_df, is.numeric)])
+cor_matrix <- cor_df %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  round(., 2)
+cor_matrix[upper.tri(cor_matrix)] <- NA
+cor_matrix <- melt(cor_matrix, na.rm = T)
+```
+
+Now we plot the correlations.
+
+```{r}
+cor_plot <- ggplot(cor_matrix, aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white") + 
+  geom_text(aes(Var1, Var2, label = value), color = "black", size = 6) +
+  scale_fill_gradient2(low = "#E66101", 
+                       high = "#2166AC", 
+                       mid = "white", 
+                       midpoint = 0, 
+                       limit = c(-1, 1), 
+                       space = "Lab", 
+                       name = "Pearson correlation") + 
+  theme_cowplot() + 
+    theme(panel.grid.major = element_blank(), 
+        panel.background = element_blank(), 
+        axis.title.x = element_blank(), 
+        axis.title.y = element_blank(), 
+        panel.border = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.text.x = element_text(
+          angle = 45, 
+          vjust = 1, 
+          hjust = 1, 
+          size = 18), 
+        axis.text.y = element_text(size = 18), 
+        #legend.justification = c(1,0), 
+        #legend.position = c(0.3, 0.65), 
+        legend.direction = "vertical", 
+        legend.key.size = unit(1, 'cm'),
+        legend.text = element_text(size = 14), 
+        legend.title = element_text(size = 30) + 
+  guides(fill = guide_colorbar(barwidth = 7, barheight = 1, 
+                               title.position = "top", title.hjust = 0.5))) + 
+  coord_fixed()
+```
+
+Save the plot to files.
+
+```{r}
+# ggsave("correlation_matrix.jpeg", cor_plot, device = "jpeg", width = 15, height = 12.5, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Figure 3: distribution of drink ratings
+
+```{r}
+drink_vals <- c("alc01", "alc02", "alc03", "alc04", "alc05", 
+              "alc06", "alc07", "alc08", "alc09", "alc10", 
+              "alc11", "alc12", "alc13", "alc14", "alc15", 
+              "alc16", "alc17", "alc18", "alc19", "alc20", 
+              "alc21", "alc22", "alc23", "alc24", "alc25",
+              "alc26", "alc27", "alc28", "alc29", "alc30",
+              "soft01", "soft02", "soft03", "soft04", "soft05", 
+              "soft06", "soft07", "soft08", "soft09", "soft10", 
+              "soft11", "soft12", "soft13", "soft14", "soft15", 
+              "soft16", "soft17", "soft18", "soft19", "soft20", 
+              "soft21", "soft22", "soft23", "soft24", "soft25",
+              "soft26", "soft27", "soft28", "soft29", "soft30")
+baseline_long <- pivot_longer(baseline_data_processed, cols = all_of(drink_vals), 
+                              names_to = "drink", values_to = "rating")
+```
+
+```{r}
+non_alcoholic <- c("soft01", "soft02", "soft03", "soft04", "soft05", 
+              "soft06", "soft07", "soft08", "soft09", "soft10", 
+              "soft11", "soft12", "soft13", "soft14", "soft15", 
+              "soft16", "soft17", "soft18", "soft19", "soft20", 
+              "soft21", "soft22", "soft23", "soft24", "soft25",
+              "soft26", "soft27", "soft28", "soft29", "soft30")
+baseline_long$alcoholic = "none"
+baseline_long <- baseline_long %>%
+  mutate(
+    alcoholic = case_when(
+      drink %in% non_alcoholic ~ "Non-Alcoholic Drinks",
+      TRUE ~ "Alcoholic Drinks"
+    )
+  )
+```
+
+```{r}
+baseline_long$drink_name = "none"
+baseline_long <- baseline_long %>%
+  mutate(
+    drink_name = case_when(
+      drink == "alc01" ~ "Budweiser",
+      drink == "alc02" ~ "Bud Light",
+      drink == "alc03" ~ "Coors Light",
+      drink == "alc04" ~ "Corona",
+      drink == "alc05" ~ "Miller Lite",
+      drink == "alc06" ~ "Michelob Ultra",
+      drink == "alc07" ~ "Stone IPA",
+      drink == "alc08" ~ "Voodoo IPA",
+      drink == "alc09" ~ "White Claw (berry)",
+      drink == "alc10" ~ "White Claw (mango)",
+      drink == "alc11" ~ "Truly (berry)",
+      drink == "alc12" ~ "Truly (pineapple)",
+      drink == "alc13" ~ "Sauvignon Blanc NZ",
+      drink == "alc14" ~ "Sauvignon Blanc CA",
+      drink == "alc15" ~ "Cabernet CA",
+      drink == "alc16" ~ "Cabernet CA 2",
+      drink == "alc17" ~ "Sparkling Wine",
+      drink == "alc18" ~ "Absolut",
+      drink == "alc19" ~ "Tito's",
+      drink == "alc20" ~ "Smirnoff",
+      drink == "alc21" ~ "1800",
+      drink == "alc22" ~ "Cuervo Silver",
+      drink == "alc23" ~ "Cuervo Gold",
+      drink == "alc24" ~ "Tanqueray Gin",
+      drink == "alc25" ~ "Gordon's Gin",
+      drink == "alc26" ~ "Jim Beam",
+      drink == "alc27" ~ "Jack Daniels",
+      drink == "alc28" ~ "Jameson",
+      drink == "alc29" ~ "Captain Morgan",
+      drink == "alc30" ~ "Bacardi"
+    )
+  )
+```
+
+
+```{r}
+baseline_long <- baseline_long %>%
+  mutate(
+    drink_name = case_when(
+      drink == "soft01" ~ "Coke",
+      drink == "soft02" ~ "Diet Coke",
+      drink == "soft03" ~ "Coke Zero",
+      drink == "soft04" ~ "Pepsi",
+      drink == "soft05" ~ "Diet Pepsi",
+      drink == "soft06" ~ "Pepsi Zero",
+      drink == "soft07" ~ "Dr Pepper",
+      drink == "soft08" ~ "Diet Dr Pepper",
+      drink == "soft09" ~ "Sprite",
+      drink == "soft10" ~ "7up",
+      drink == "soft11" ~ "Sunkist",
+      drink == "soft12" ~ "Mtn Dew",
+      drink == "soft13" ~ "Canada Dry",
+      drink == "soft14" ~ "Root Beer",
+      drink == "soft15" ~ "Arizona (green)",
+      drink == "soft16" ~ "Arizona (red)",
+      drink == "soft17" ~ "Snapple",
+      drink == "soft18" ~ "Gatorade (orange)",
+      drink == "soft19" ~ "Gatorade (red)",
+      drink == "soft20" ~ "Monster",
+      drink == "soft21" ~ "Diet Monster",
+      drink == "soft22" ~ "Redbull",
+      drink == "soft23" ~ "Diet Redbull",
+      drink == "soft24" ~ "Celsius (lime)",
+      drink == "soft25" ~ "Celsius (orange)",
+      drink == "soft26" ~ "Strawberry Smoothie",
+      drink == "soft27" ~ "Mango Smoothie",
+      drink == "soft28" ~ "Orange Juice",
+      drink == "soft29" ~ "Coffee",
+      drink == "soft30" ~ "Frappuccino",
+      TRUE ~ drink_name
+    )
+  )
+```
+
+
+
+```{r}
+baseline_long <- baseline_long %>%
+  group_by(drink_name) %>%
+  mutate(mean_rating = mean(rating, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(drink_name = reorder(drink_name, mean_rating))
+```
+
+```{r}
+drink_colors <- colorRampPalette(c(
+  "#B2182B",  # muted red
+  "#D6604D",  # soft orange
+  "#66BB66",  # desaturated green
+  "#4393C3",  # muted blue
+  "#762A83"   # muted purple
+))(30)
+```
+
+```{r}
+library(cowplot)
+
+# Shared plotting function
+plot_by_type <- function(data, title) {
+  ggplot(data, aes(x = drink_name, y = rating, color = drink_name)) +
+    geom_jitter(size = 0.35, alpha = 0.3, width = 0.2) + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.5, color = "black") +
+    scale_color_manual(values = drink_colors) + 
+    labs(title = title, y = "Rating of Drink", x = NULL, color = "Drink") +
+    coord_cartesian(ylim = c(1, 4)) +
+    theme_minimal(base_size = 13) +
+    guides(color = guide_legend(
+    override.aes = list(size = 4),
+    ncol = 2,
+    byrow = F
+  )) +
+    theme_cowplot() +
+    theme(
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      plot.title = element_text(size = 14.5, face = "bold", hjust = 0.5),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 14),
+      legend.title = element_text(size = 17),
+      legend.text = element_text(size = 14.5),
+      legend.key.height = unit(0.3, "cm")
+    )
+}
+
+# Generate plots
+plot_alc <- plot_by_type(filter(baseline_long, alcoholic == "Alcoholic Drinks"), "Alcoholic Drinks")
+plot_nonalc <- plot_by_type(filter(baseline_long, alcoholic == "Non-Alcoholic Drinks"), "Non-Alcoholic Drinks")
+
+# Combine vertically
+final_plot <- plot_grid(plot_alc, plot_nonalc, ncol = 1, align = "v")
+final_plot
+```
+
+Save the plot to files.
+
+```{r}
+# ggsave("faceted_drink_plot.jpeg", final_plot, device = "jpeg", width = 12, height = 10, dpi = 300)
+```
+
+
+Now we will make a plot with non-copyrite names, ordered alphabetically.
+
+```{r}
+baseline_long <- baseline_long %>%
+  mutate(
+    drink_name = case_when(
+      drink_name == "Bud Light" ~ "Beer 1",
+      drink_name == "Budweiser" ~ "Beer 2",
+      drink_name == "Coors Light" ~ "Beer 3",
+      drink_name == "Corona" ~ "Beer 4",
+      drink_name == "Michelob Ultra" ~ "Beer 5",
+      drink_name == "Miller Lite" ~ "Beer 6",
+      drink_name == "Stone IPA" ~ "IPA 1",
+      drink_name == "Voodoo IPA" ~ "IPA 2",
+      drink_name == "Truly (berry)" ~ "Seltzer 1",
+      drink_name == "Truly (pineapple)" ~ "Seltzer 2",
+      drink_name == "White Claw (berry)" ~ "Seltzer 3",
+      drink_name == "White Claw (mango)" ~ "Seltzer 4",
+      drink_name == "Sauvignon Blanc CA" ~ "White Wine 1",
+      drink_name == "Sauvignon Blanc NZ" ~ "White Wine 2",
+      drink_name == "Cabernet CA" ~ "Red Wine 1",
+      drink_name == "Cabernet CA 2" ~ "Red Wine 2",
+      drink_name == "Sparkling Wine" ~ "Sparkling Wine",
+      drink_name == "Absolut" ~ "Vodka 1",
+      drink_name == "Smirnoff" ~ "Vodka 2",
+      drink_name == "Tito's" ~ "Vodka 3",
+      drink_name == "1800" ~ "Tequila 1",
+      drink_name == "Cuervo Gold" ~ "Tequila 2",
+      drink_name == "Cuervo Silver" ~ "Tequila 3",
+      drink_name == "Gordon's Gin" ~ "Gin 1",
+      drink_name == "Tanqueray Gin" ~ "Gin 2",
+      drink_name == "Jim Beam" ~ "Bourbon",
+      drink_name == "Jack Daniels" ~ "Whiskey 1",
+      drink_name == "Jameson" ~ "Whiskey 2",
+      drink_name == "Bacardi" ~ "Rum 1",
+      drink_name == "Captain Morgan" ~ "Rum 2",
+      TRUE ~ drink_name
+    )
+  )
+```
+
+
+```{r}
+baseline_long <- baseline_long %>%
+  mutate(
+    drink_name = case_when(
+      drink_name == "7up" ~ "Soda 1",
+      drink_name == "Canada Dry" ~ "Soda 2",
+      drink_name == "Coke" ~ "Soda 3",
+      drink_name == "Coke Zero" ~ "Soda 4",
+      drink_name == "Diet Coke" ~ "Soda 5",
+      drink_name == "Diet Dr Pepper" ~ "Soda 6",
+      drink_name == "Diet Pepsi" ~ "Soda 7",
+      drink_name == "Dr Pepper" ~ "Soda 8",
+      drink_name == "Mtn Dew" ~ "Soda 9",
+      drink_name == "Pepsi" ~ "Soda 10",
+      drink_name == "Pepsi Zero" ~ "Soda 11",
+      drink_name == "Root Beer" ~ "Soda 12",
+      drink_name == "Sprite" ~ "Soda 13",
+      drink_name == "Sunkist" ~ "Soda 14",
+      drink_name == "Arizona (green)" ~ "Sweet Tea 1",
+      drink_name == "Arizona (red)" ~ "Sweet Tea 2",
+      drink_name == "Snapple" ~ "Sweet Tea 3",
+      drink_name == "Gatorade (orange)" ~ "Sports Drink 1",
+      drink_name == "Gatorade (red)" ~ "Sports Drink 2",
+      drink_name == "Celsius (lime)" ~ "Energy Drink 1",
+      drink_name == "Celsius (orange)" ~ "Energy Drink 2",
+      drink_name == "Diet Monster" ~ "Energy Drink 3",
+      drink_name == "Diet Redbull" ~ "Energy Drink 4",
+      drink_name == "Monster" ~ "Energy Drink 5",
+      drink_name == "Redbull" ~ "Energy Drink 6",
+      drink_name == "Mango Smoothie" ~ "Smoothie 1",
+      drink_name == "Strawberry Smoothie" ~ "Smoothie 2",
+      drink_name == "Orange Juice" ~ "Orange Juice",
+      drink_name == "Coffee" ~ "Coffee 1",
+      drink_name == "Frappuccino" ~ "Coffee 2",
+      TRUE ~ drink_name
+    )
+  )
+```
+
+```{r}
+baseline_long <- baseline_long %>%
+  group_by(drink_name) %>%
+  mutate(mean_rating = mean(rating, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(drink_name = reorder(drink_name, mean_rating))
+```
+
+
+Now we plot the nondescript data.
+
+```{r}
+# Generate plots
+plot_alc_nondescript <- plot_by_type(filter(baseline_long, alcoholic == "Alcoholic Drinks"), "Alcoholic Drinks")
+plot_nonalc_nondescript <- plot_by_type(filter(baseline_long, alcoholic == "Non-Alcoholic Drinks"), "Non-Alcoholic Drinks")
+
+# Combine vertically
+final_plot_nondescript <- plot_grid(plot_alc_nondescript, plot_nonalc_nondescript, ncol = 1, align = "v")
+final_plot_nondescript
+```
+
+```{r}
+# ggsave("nondescript_drink_plot.jpeg", final_plot_nondescript, device = "jpeg", 
+#width = 12, height = 10, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+## Figure 4: Descriptives for Stress Event Data
+
+We will make 3 plots for stress event data: frequency of occurrence, type of event,
+and stress ratings for events.
+
+```{r}
+event_freq_barplot <- ggplot(survey_data_processed, aes(x = stress_event,
+                                                fill = "#fc8eac", color = "#fc8eac")) +
+  geom_bar() +
+  theme_cowplot() +
+  scale_fill_manual(values = "#fc8eac") +
+  scale_color_manual(values = "#fc8eac") +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(title = "", x = "Stress Event Occurred", y = "Count")
+event_freq_barplot
+```
+
+```{r}
+survey_data_event <- survey_data_processed %>%
+  mutate(
+    stress_event_type_overall = case_when(
+      stress_event_type_overall == "argument" ~ "Argument",
+      stress_event_type_overall == "difficulty_home" ~ "Home Difficulty",
+      stress_event_type_overall == "difficulty_work_school" ~ "Work/School Difficulty",
+      stress_event_type_overall == "health_issue" ~ "Health Issue",
+      stress_event_type_overall == "multiple" ~ "Multiple",
+      stress_event_type_overall == "neg_event_to_others" ~ "Witnessed Neg. Event",
+      stress_event_type_overall == "other" ~ "Other",
+      stress_event_type_overall == "social_dissapointment" ~ "Social Dissapointment"
+    )
+  )
+# survey_data_event <- rename(survey_data_event, "Event Type" = "stress_event_type_overall")
+pink_gradient <- c(
+  "#fde3eb",  # lightest
+  "#f8b5c7",
+  "#f288a3",
+  "#ec5a8b",
+  "#E75480",  # middle
+  "#d04074",
+  "#b53066",
+  "#951e55"   # darkest
+)
+
+stressor_order <- c("Argument", "Social Dissapointment", "Work/School Difficulty",
+  "Home Difficulty", "Health Issue", "Witnessed Neg. Event", "Multiple", "Other")
+survey_data_event <- survey_data_event %>%
+  mutate(stress_event_type_overall = factor(stress_event_type_overall, levels = stressor_order))
+
+event_type_barplot <- ggplot(data = subset(survey_data_event, !is.na(stress_event_type_overall)), 
+                                           aes(x = stress_event_type_overall,
+                                           fill = stress_event_type_overall, color = stress_event_type_overall)) +
+  geom_bar() +
+  theme_cowplot() +
+  scale_fill_manual(values = pink_gradient) +
+  scale_color_manual(values = pink_gradient) +
+  guides(fill = guide_legend(direction = "vertical", ncol = 1)) +
+  scale_x_discrete(labels = rep(" ", 8)) +
+    theme(
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      legend.text = element_text(size = 11), 
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18),
+      axis.text.x.bottom = element_text(margin = margin(t = 8))
+      ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(title = "", x = "Stress Event Type", y = "Count")
+event_type_barplot 
+```
+
+
+```{r}
+stress_level_plot <- ggplot(data = subset(survey_data_processed, !is.na(stress_event_type_overall)), 
+                            aes(x = stress_event_intensity, y = "",
+                            fill = "#ff3377", color = "#ff3377")) +
+ ggridges::stat_binline(bins = 5, breaks = c(-0.05, 0.77, 1.59, 2.41, 3.23, 4.05), 
+                        scale = 0.5, alpha = 0.5, lwd = 1, fatten = 1.5,
+                         position = position_nudge(y = 0.18), draw_baseline = F, pad = F) +
+  geom_boxplot(width = .15, alpha = .5, lwd = 1, fatten = 1.5, outlier.shape = NA,
+                          size = 1.15, position = position_nudge(y = -0.25)) +
+  geom_jitter(aes(color = "#ff3377"), alpha = 0.15, size = 0.8, height = 0.1) +
+  coord_flip() +
+  theme_cowplot() +
+  scale_fill_manual(values = "#ff3377") +
+  scale_color_manual(values = "#ff3377") +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  labs(title = "", x = "Rating", y = "Stress Event Intensity") + 
+  scale_x_continuous(breaks = c(0, 1, 2, 3, 4))
+stress_level_plot
+```
+
+Now we can save them all together.
+
+```{r}
+# figure4 <- ggpubr::ggarrange(
+#   event_freq_barplot, stress_level_plot, event_type_barplot,
+#   ncol = 3,
+#   nrow = 1,
+#   widths = c(2, 2, 4),
+#   labels = c("A", "B", "C"),
+#   font.label = list(size = 20, face = "bold"), # Optional formatting
+#   label.x = 0,
+#   label.y = 1
+# )
+# figure4
+# ggsave("figure4.jpg", figure4, width = 12, height = 6, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+## Figure 5: Raincloud Plots of Emotions
+
+First we change the data into long format.
+
+```{r}
+emotion_items <- c("stress_state", "NA_state", "PA_state")
+survey_long <- pivot_longer(survey_data_processed, cols = all_of(emotion_items),
+                              names_to = "emotion", values_to = "rating")
+survey_long <- survey_long %>%
+  mutate(
+    emotion = case_when(
+      emotion == "stress_state" ~ "Stress",
+      emotion == "NA_state" ~ "Negative Affect",
+      emotion == "PA_state" ~ "Positive Affect"
+    )
+  )
+```
+
+Then we make our raincloud plot.
+
+```{r}
+colors <- c("#4575B4", "#1A9850", "#D73027")
+emotion_raincloud_plot <- ggplot(survey_long, aes(x = rating, y = fct_relevel(emotion, "Stress",
+                                        "Negative Affect", "Positive Affect"), fill = emotion, color = emotion)) +
+  ggridges::stat_binline(bins = 5, scale = 0.3, alpha = 0.5, lwd = 1, fatten = 1.5,
+                         position = position_nudge(y = 0.15), draw_baseline = F, pad = F) +
+  geom_boxplot(width = .15, alpha = .5, lwd = 1, fatten = 1.5, outlier.shape = NA,
+                          size = 1.15, position = position_nudge(y = -0.22)) +
+  geom_jitter(aes(color = emotion), alpha = 0.15, size = 0.8, height = 0.05) +
+  coord_flip() +
+  theme_cowplot() +
+  scale_fill_manual(values = colors) +
+  scale_color_manual(values = colors) +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(size = 14.5, face = "bold", hjust = 0.5),
+      axis.text.x = element_text(size = 18),
+      axis.title.x = element_blank(),
+      axis.text.y = element_text(size = 18),
+      axis.title.y = element_text(size = 18)
+    ) +
+  labs(title = "", x = "Rating") +
+  scale_x_continuous(breaks = 0:4)
+emotion_raincloud_plot
+```
+
+```{r}
+# ggsave("emotion_raincloud_plot.jpeg", emotion_raincloud_plot, device = "jpeg", width = 12, height = 10, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+## Figure 6: Raincloud plots for ddm variables, prop alc responses, and median rt
+
+First we change the data into long format. These plots will have one value
+for each subject session combination.
+
+```{r}
+k99_shared_data_3 <- k99_shared_data %>%
+  group_by(subject, session) %>%
+  mutate(
+    prop_alc_responses = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    median_rt = median(rt, na.rm = T)
+  ) %>%
+  slice(1)
+```
+
+```{r}
+boundary_raincloud_plot <- plot_rc(k99_shared_data_3, k99_shared_data_3$B, 
+                              "#907ad6", 1, .33, -.45, -0.17, 0.05, 0.75, 0.05)
+boundary_raincloud_plot <- boundary_raincloud_plot + labs(title = "", x = "Decision Boundary", y = "") + 
+  scale_x_continuous(breaks = seq(0, 4, by = 1)) + 
+  xlim(0, 4)
+boundary_raincloud_plot
+```
+
+```{r}
+alcbias_raincloud_plot  <- plot_rc(k99_shared_data_3, k99_shared_data_3$alcbias, 
+                                "#341671", 1, .33, -.45, -0.17, 0.05, .75, 0.05)
+alcbias_raincloud_plot <- alcbias_raincloud_plot + labs(title = "", x = "Alcohol Bias", y = "") + 
+  scale_x_continuous(breaks = seq(-5, 5, by = 1)) + xlim(-5, 5)
+alcbias_raincloud_plot
+```
+
+
+```{r}
+drift_raincloud_plot  <- plot_rc(k99_shared_data_3, k99_shared_data_3$drift, 
+                                "#5a3f96", 1, .33, -.45, -0.17, 0.05, .75, 0.05)
+drift_raincloud_plot <- drift_raincloud_plot + labs(title = "", x = "Drift Rate", y = "") + xlim(-1.5, 1.5)
+drift_raincloud_plot
+```
+
+```{r}
+nondec_raincloud_plot  <- plot_rc(k99_shared_data_3, k99_shared_data_3$nondectime, 
+                                "#280659", 1, .33, -.45, -0.17, 0.05, 0.75, 0.05)
+nondec_raincloud_plot <- nondec_raincloud_plot + labs(title = "", x = "Non-Decision Time", y = "") + 
+  scale_x_continuous(breaks = seq(0, 1, by = .1)) + xlim(0, 1)
+nondec_raincloud_plot
+```
+
+```{r}
+rt_raincloud_plot <- plot_rc(k99_shared_data_3, k99_shared_data_3$median_rt, 
+                                "#660f56", 1, .33, -.45, -0.17, 0.05, 0.75, 0.05)
+rt_raincloud_plot <- rt_raincloud_plot + labs(title = "", x = "Median Response Time", y = "") +
+                      xlim(0, 2)
+rt_raincloud_plot
+```
+
+
+```{r}
+response_raincloud_plot <- plot_rc(k99_shared_data_3, k99_shared_data_3$prop_alc_responses, 
+                                "#ae2d68", 1, .33, -.45, -0.17, 0.05, 0.75, 0.05)
+response_raincloud_plot <- response_raincloud_plot + labs(title = "", x = "Choices for Alcohol (%)", y = "") +
+                          xlim(0, 1)
+response_raincloud_plot
+```
+
+
+```{r}
+figure6 <- ggpubr::ggarrange(
+  response_raincloud_plot, rt_raincloud_plot, boundary_raincloud_plot,
+  drift_raincloud_plot, alcbias_raincloud_plot, nondec_raincloud_plot,
+  ncol = 2,
+  nrow = 3,
+  widths = c(2, 2),
+  labels = c("E", "F", "G", "H", "I", "J"),
+  font.label = list(size = 20, face = "bold"), # Optional formatting
+  label.x = 0,
+  label.y = 1
+)
+# figure6
+# ggsave("figure6.jpg", figure6, width = 7.5, height = 12.5, dpi = 300)
+```
+
+## Combining Figures 4, 5, and 6
+
+```{r}
+figure10a <- ggpubr::ggarrange(
+  figure4, emotion_raincloud_plot,
+  ncol = 1,
+  nrow = 2,
+  labels = c("", "D"),
+  font.label = list(size = 20, face = "bold"), # Optional formatting
+  label.x = 0,
+  label.y = 1
+)
+
+figure10 <- ggpubr::ggarrange(
+  figure10a, figure6,
+  ncol = 2,
+  nrow = 1,
+  widths = c(2.2, 1),
+  font.label = list(size = 20, face = "bold"), # Optional formatting
+  label.x = 0,
+  label.y = 1
+)
+# ggsave("figure10.jpeg", figure10, device = "jpeg", width = 16, height = 10, dpi = 300)
+```
+
+
+
+
+
+
+
+
+## Figure 7: Distribution of prop alc responses and median rt by value function
+
+We need to calculate the average response prop and average median rt
+for each value in the value function.
+
+```{r}
+k99_shared_data_4 <- k99_shared_data %>%
+  group_by(subject, session, value_function) %>%
+  mutate(
+    prop_alc_responses = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    median_rt = median(rt, na.rm = T)
+  ) %>% 
+  slice(1)
+k99_shared_data_4 <- k99_shared_data_4[c("subject", "session", "value_function",
+                    "prop_alc_responses", "median_rt")]
+```
+
+
+```{r}
+plot_value <- function(yvar, clr, clr2) {
+  ggplot(k99_shared_data_4, aes(x = value_function, y = yvar, 
+                                    fill = clr, color = clr, group = interaction(subject,session))) +
+  geom_point(size = 2, alpha = 0.02) +
+  geom_line(alpha = 0.02) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", size = 5, color = clr2) +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", size = 2, color = clr2) + 
+  theme_cowplot() +
+  scale_fill_manual(values = clr) +
+  scale_color_manual(values = clr) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_x_continuous(breaks = seq(-3, 3, by = 1))
+}
+```
+
+
+```{r}
+response_value_plot <- plot_value(k99_shared_data_4$prop_alc_responses, "#ae2d68", "#7d274e")
+response_value_plot <- response_value_plot + labs(title = "", x = "Value Function", y = "Choices for Alcohol (%)")
+response_value_plot
+```
+
+
+```{r}
+rt_value_plot <- plot_value(k99_shared_data_4$median_rt, "#660f56", "#421239")
+rt_value_plot <- rt_value_plot + labs(title = "", x = "Value Function", y = "Median Response Time")
+rt_value_plot
+```
+
+We see that people are less likely to choose alcohol when they indicated a lesser
+baseline preference as expected. We also see they take a tiny bit longer (?) to
+choose when they are more indifferent.
+
+```{r}
+figure7 <- ggpubr::ggarrange(
+  response_value_plot, rt_value_plot,
+  ncol = 1,
+  nrow = 2,
+  labels = c("A", "B"),
+  font.label = list(size = 15, face = "bold"), # Optional formatting
+  label.x = 0,
+  label.y = 1
+)
+ggsave("figure7.jpg", figure7, width = 6, height = 8, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##Figure 8: distribution of 6 vars by stress event
+
+
+```{r}
+k99_shared_data_5 <- k99_shared_data %>%
+  group_by(subject, session, stress_event) %>%
+  mutate(
+    stress_prop_alc = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    stress_median_rt = median(rt, na.rm = T),
+    stress_boundary = mean(B),
+    stress_bias = mean(alcbias),
+    stress_drift = mean(drift),
+    stress_nondec = mean(nondectime)
+  ) %>% 
+  slice(1)
+k99_shared_data_5 <- k99_shared_data_5[c("subject", "stress_event", "stress_event_intensity",
+                    "stress_prop_alc", "stress_median_rt",
+                    "stress_boundary", "stress_bias",
+                    "stress_drift", "stress_nondec")]
+```
+
+```{r}
+plot_stress <- function(yvar, clr) {
+  ggplot(k99_shared_data_5, aes(x = stress_event, y = yvar, 
+                                    fill = clr, color = clr, group = subject)) +
+  # geom_point(size = 2, alpha = 0.01) +
+  geom_jitter(aes(color = clr), alpha = 0.03, size = 0.8, width = 0.15) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", size = 5) +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", size = 1.25) + 
+  theme_cowplot() +
+  scale_fill_manual(values = clr) +
+  scale_color_manual(values = clr) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_x_discrete()
+}
+```
+
+
+```{r}
+rt_stress_plot <- plot_stress(k99_shared_data_5$stress_median_rt,"#660f56")
+rt_stress_plot <- rt_stress_plot + ylim(0, 2) +
+  labs(title = "", x = "Stress Event", y = "Median Response Time")
+rt_stress_plot
+```
+
+
+```{r}
+response_stress_plot <- plot_stress(k99_shared_data_5$stress_prop_alc,"#ae2d68")
+response_stress_plot <- response_stress_plot + labs(title = "", x = "Stress Event", y = "Choices for Alcohol (%)")
+response_stress_plot
+```
+
+We see that there is a difference in means.
+
+```{r}
+bias_stress_plot <- plot_stress(k99_shared_data_5$stress_bias,"#341671")
+bias_stress_plot <- bias_stress_plot + ylim(-5, 5) +
+  labs(title = "", x = "Stress Event", y = "Alcohol Bias")
+bias_stress_plot
+```
+
+
+```{r}
+boundary_stress_plot <- plot_stress(k99_shared_data_5$stress_boundary,"#907ad6")
+boundary_stress_plot <- boundary_stress_plot + ylim(0, 4) +
+  labs(title = "", x = "Stress Event", y = "Decision Boundary")
+boundary_stress_plot
+```
+
+```{r}
+drift_stress_plot <- plot_stress(k99_shared_data_5$stress_drift,"#5a3f96")
+drift_stress_plot <- drift_stress_plot + ylim(-1.5, 1.5) +
+  labs(title = "", x = "Stress Event", y = "Drift Rate")
+drift_stress_plot
+```
+
+
+```{r}
+nondec_stress_plot <- plot_stress(k99_shared_data_5$stress_nondec,"#280659")
+nondec_stress_plot <- nondec_stress_plot + ylim(0, 1) + 
+  labs(title = "", x = "Stress Event", y = "Non-Decision Time")
+nondec_stress_plot
+```
+
+```{r}
+# figure8 <- ggpubr::ggarrange(
+#   response_stress_plot, rt_stress_plot, boundary_stress_plot, 
+#   drift_stress_plot, bias_stress_plot, nondec_stress_plot,
+#   ncol = 2, 
+#   nrow = 3,
+#   widths = c(2, 2),
+#   labels = c("A", "B", "C", "D", "E", "F"),
+#   font.label = list(size = 20, face = "bold"), # Optional formatting
+#   label.x = 0,
+#   label.y = 1 
+# )
+# ggsave("figure8.jpg", figure8, width = 7.5, height = 12.5, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Figure 9: Distribution of 6 vars by stress level
+
+```{r}
+k99_shared_data_6 <- k99_shared_data %>%
+  group_by(subject, session, stress_state, na.rm = T) %>%
+  mutate(
+    stress_prop_alc = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    stress_median_rt = median(rt, na.rm = T),
+    stress_boundary = mean(B, na.rm = T),
+    stress_bias = mean(alcbias, na.rm = T),
+    stress_drift = mean(drift, na.rm = T),
+    stress_nondec = mean(nondectime, na.rm = T)
+  ) %>% 
+  slice(1) 
+k99_shared_data_6 <- k99_shared_data_6[c("subject", "session", "stress_state",
+                    "stress_prop_alc", "stress_median_rt", "stress_boundary",
+                    "stress_bias", "stress_drift", "stress_nondec")]
+
+head(k99_shared_data_6)
+```
+
+```{r}
+state_plot <- function(df, xvar, yvar, clr) { 
+  ggplot(df, aes(x = xvar, y = yvar, fill = clr, color = clr)) +
+  geom_jitter(aes(color = clr), alpha = 0.03, size = 0.8, width = 0.15) +
+  geom_smooth(method = "lm") +
+  theme_cowplot() +
+  scale_fill_manual(values = clr) +
+  scale_color_manual(values = clr) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_x_continuous(breaks = seq(0, 4, by = 1))
+}
+```
+
+
+```{r}
+prop_stress_plot <- state_plot(k99_shared_data_6, k99_shared_data_6$stress_state, 
+                k99_shared_data_6$stress_prop_alc,"#F7685C")
+prop_stress_plot <- prop_stress_plot + ylim(0, 1) + 
+  labs(title = "", x = "Stress State", y = "Choices for Alcohol (%)")
+prop_stress_plot
+```
+
+
+```{r}
+rt_stress_plot <- state_plot(k99_shared_data_6, k99_shared_data_6$stress_state, 
+                k99_shared_data_6$stress_median_rt,"#E24942")
+rt_stress_plot <- rt_stress_plot + ylim(0, 2) + 
+  labs(title = "", x = "Stress State", y = "Median Response Time")
+rt_stress_plot
+```
+
+
+```{r}
+boundary_stress_plot <- state_plot(k99_shared_data_6, k99_shared_data_6$stress_state, 
+                k99_shared_data_6$stress_boundary,"#D73027")
+boundary_stress_plot <- boundary_stress_plot + ylim(0, 4) + 
+  labs(title = "", x = "Stress State", y = "Decision Boundary")
+boundary_stress_plot
+```
+
+
+```{r}
+bias_stress_plot <- state_plot(k99_shared_data_6, k99_shared_data_6$stress_state, 
+                k99_shared_data_6$stress_bias,"#a32d26")
+bias_stress_plot <- bias_stress_plot + ylim(-5, 5) + 
+  labs(title = "", x = "Stress State", y = "Alcohol Bias")
+bias_stress_plot
+```
+
+
+```{r}
+drift_stress_plot <- state_plot(k99_shared_data_6, k99_shared_data_6$stress_state, 
+                k99_shared_data_6$stress_drift,"#b5332b")
+drift_stress_plot <- drift_stress_plot + ylim(-1.5, 1.5) + 
+  labs(title = "", x = "Stress State", y = "Drift Rate")
+drift_stress_plot
+```
+
+
+```{r}
+nondec_stress_plot <- state_plot(k99_shared_data_6, k99_shared_data_6$stress_state, 
+                k99_shared_data_6$stress_nondec,"#7F1812")
+nondec_stress_plot <- nondec_stress_plot + ylim(0, 1) + 
+  labs(title = "", x = "Stress State", y = "Non-Decision Time")
+nondec_stress_plot
+```
+
+
+```{r}
+# figure9_stress <- ggpubr::ggarrange(
+#   prop_stress_plot, rt_stress_plot, boundary_stress_plot, 
+#   drift_stress_plot, bias_stress_plot, nondec_stress_plot,
+#   ncol = 2, 
+#   nrow = 3,
+#   widths = c(2, 2),
+#   labels = c("A", "B", "C", "D", "E", "F"),
+#   font.label = list(size = 20, face = "bold"), # Optional formatting
+#   label.x = 0,
+#   label.y = 1 
+# )
+# ggsave("figure9_stress.jpg", figure9_stress, width = 8, height = 12, dpi = 300)
+```
+
+
+
+Now we repeat for NA.
+
+```{r}
+k99_shared_data_7 <- k99_shared_data %>%
+  group_by(subject, session, NA_state, na.rm = T) %>%
+  mutate(
+    NA_prop_alc = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    NA_median_rt = median(rt, na.rm = T),
+    NA_boundary = mean(B, na.rm = T),
+    NA_bias = mean(alcbias, na.rm = T),
+    NA_drift = mean(drift, na.rm = T),
+    NA_nondec = mean(nondectime, na.rm = T)
+  ) %>% 
+  slice(1)
+k99_shared_data_7 <- k99_shared_data_7[c("subject", "session", "NA_state",
+                    "NA_prop_alc", "NA_median_rt", "NA_boundary",
+                    "NA_bias", "NA_drift", "NA_nondec")]
+```
+
+
+```{r}
+prop_NA_plot <- state_plot(k99_shared_data_7, k99_shared_data_7$NA_state, 
+                k99_shared_data_7$NA_prop_alc,"#91B7D9")
+prop_NA_plot <- prop_NA_plot + ylim(0, 1) + 
+  labs(title = "", x = "Negative Affect", y = "Choices for Alcohol (%)")
+prop_NA_plot
+```
+
+
+```{r}
+rt_NA_plot <- state_plot(k99_shared_data_7, k99_shared_data_7$NA_state, 
+                k99_shared_data_7$NA_median_rt,"#6C99C9")
+rt_NA_plot <- rt_NA_plot + ylim(0, 2) + 
+  labs(title = "", x = "Negative Affect", y = "Median Response Time")
+rt_NA_plot
+```
+
+
+```{r}
+boundary_NA_plot <- state_plot(k99_shared_data_7, k99_shared_data_7$NA_state, 
+                k99_shared_data_7$NA_boundary,"#4575B4")
+boundary_NA_plot <- boundary_NA_plot + ylim(0, 4) + 
+  labs(title = "", x = "Negative Affect", y = "Decision Boundary")
+boundary_NA_plot
+```
+
+
+```{r}
+bias_NA_plot <- state_plot(k99_shared_data_7, k99_shared_data_7$NA_state, 
+                k99_shared_data_7$NA_bias,"#2C5D9C")
+bias_NA_plot <- bias_NA_plot + ylim(-5, 5) + 
+  labs(title = "", x = "Negative Affect", y = "Alcohol Bias")
+bias_NA_plot
+```
+
+
+```{r}
+drift_NA_plot <- state_plot(k99_shared_data_7, k99_shared_data_7$NA_state, 
+                k99_shared_data_7$NA_drift,"#1B3E70")
+drift_NA_plot <- drift_NA_plot + ylim(-1.5, 1.5) + 
+  labs(title = "", x = "Negative Affect", y = "Drift Rate")
+drift_NA_plot
+```
+
+
+```{r}
+nondec_NA_plot <- state_plot(k99_shared_data_7, k99_shared_data_7$NA_state, 
+                k99_shared_data_7$NA_nondec,"#0b2140")
+nondec_NA_plot <- nondec_NA_plot + ylim(0, 1) + 
+  labs(title = "", x = "Negative Affect", y = "Non-Decision Time")
+nondec_NA_plot
+```
+
+
+```{r}
+# figure9_NA <- ggpubr::ggarrange(
+#   prop_NA_plot, rt_NA_plot, boundary_NA_plot, 
+#   drift_NA_plot, bias_NA_plot, nondec_NA_plot,
+#   ncol = 2, 
+#   nrow = 3,
+#   widths = c(2, 2),
+#   labels = c("A", "B", "C", "D", "E", "F"),
+#   font.label = list(size = 20, face = "bold"), # Optional formatting
+#   label.x = 0,
+#   label.y = 1 
+# )
+# ggsave("figure9_NA.jpg", figure9_NA, width = 8, height = 12, dpi = 300)
+```
+
+
+
+Now we repeat for PA.
+
+```{r}
+k99_shared_data_8 <- k99_shared_data %>%
+  group_by(subject, session, PA_state, na.rm = T) %>%
+  mutate(
+    PA_prop_alc = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    PA_median_rt = median(rt, na.rm = T),
+    PA_boundary = mean(B, na.rm = T),
+    PA_bias = mean(alcbias, na.rm = T),
+    PA_drift = mean(drift, na.rm = T),
+    PA_nondec = mean(nondectime, na.rm = T)
+  ) %>% 
+  slice(1)
+k99_shared_data_8 <- k99_shared_data_8[c("subject", "session", "PA_state",
+                    "PA_prop_alc", "PA_median_rt", "PA_boundary",
+                    "PA_bias", "PA_drift", "PA_nondec")]
+```
+
+
+```{r}
+prop_PA_plot <- state_plot(k99_shared_data_8, k99_shared_data_8$PA_state, 
+                k99_shared_data_8$PA_prop_alc,"#7BC87C")
+prop_PA_plot <- prop_PA_plot + ylim(0, 1) + 
+  labs(title = "", x = "Positive Affect", y = "Choices for Alcohol (%)")
+prop_PA_plot
+```
+
+
+```{r}
+rt_PA_plot <- state_plot(k99_shared_data_8, k99_shared_data_8$PA_state, 
+                k99_shared_data_8$PA_median_rt,"#4FBF64")
+rt_PA_plot <- rt_PA_plot + ylim(0, 2) + 
+  labs(title = "", x = "Positive Affect", y = "Median Response Time")
+rt_PA_plot
+```
+
+
+```{r}
+boundary_PA_plot <- state_plot(k99_shared_data_8, k99_shared_data_8$PA_state, 
+                k99_shared_data_8$PA_boundary,"#1A9850")
+boundary_PA_plot <- boundary_PA_plot + ylim(0, 4) + 
+  labs(title = "", x = "Positive Affect", y = "Decision Boundary")
+boundary_PA_plot
+```
+
+
+```{r}
+bias_PA_plot <- state_plot(k99_shared_data_8, k99_shared_data_8$PA_state, 
+                k99_shared_data_8$PA_bias,"#137F42")
+bias_PA_plot <- bias_PA_plot + ylim(-5, 5) + 
+  labs(title = "", x = "Positive Affect", y = "Alcohol Bias")
+bias_PA_plot
+```
+
+
+```{r}
+drift_PA_plot <- state_plot(k99_shared_data_8, k99_shared_data_8$PA_state, 
+                k99_shared_data_8$PA_drift,"#0A5E2F")
+drift_PA_plot <- drift_PA_plot + ylim(-1.5, 1.5) + 
+  labs(title = "", x = "Positive Affect", y = "Drift Rate")
+drift_PA_plot
+```
+
+
+```{r}
+nondec_PA_plot <- state_plot(k99_shared_data_8, k99_shared_data_8$PA_state, 
+                k99_shared_data_8$PA_nondec,"#054220")
+nondec_PA_plot <- nondec_PA_plot + ylim(0, 1) + 
+  labs(title = "", x = "Positive Affect", y = "Non-Decision Time")
+nondec_PA_plot
+```
+
+
+```{r}
+# figure9_PA <- ggpubr::ggarrange(
+#   prop_PA_plot, rt_PA_plot, boundary_PA_plot, 
+#   drift_PA_plot, bias_PA_plot, nondec_PA_plot,
+#   ncol = 2, 
+#   nrow = 3,
+#   widths = c(2, 2),
+#   labels = c("A", "B", "C", "D", "E", "F"),
+#   font.label = list(size = 20, face = "bold"), # Optional formatting
+#   label.x = 0,
+#   label.y = 1 
+# )
+# ggsave("figure9_PA.jpg", figure9_PA, width = 8, height = 12, dpi = 300)
+```
+
+
+### Figure 10: Distribution of EMA Responses
+
+We will plot the overall means/SE of the number of responses per day of EMA.
+This is measured by the number of days after they completed the baseline.
+
+We can calculate the day number using end_date_string (when they finished the
+baseline survey) and the date variable for each survey.
+
+*complete something after midnight?*
+
+```{r}
+# first we need to create a new df
+ema_grid <- expand.grid(
+  subject = 1:250,
+  day_number = 1:14,
+  daily_session = c("sess_1", "sess_2", "sess_3")
+)
+#add day num to merged with days since baseline
+k99_shared_data_9 <- k99_shared_data %>%
+  group_by(subject) %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"),
+         baseline_date = as.Date(end_date_string, format = "%m/%d/%Y"),
+         day_number = as.numeric(difftime(date, baseline_date, units = "days"))) %>%
+  mutate(
+    day_number = ifelse(day_number >= 1 & day_number <= 14, day_number, NA)
+  ) %>% #there are 66000 NAs after this.
+  group_by(subject, day_number) %>%
+  mutate(num_completions = n_distinct(session),
+         sess_1 = ifelse(num_completions >= 1, 1, 0),
+         sess_2 = ifelse(num_completions >= 2, 1, 0),
+         sess_3 = ifelse(num_completions >= 3, 1, 0)) %>%
+  ungroup() %>%
+  pivot_longer(cols = c("sess_1", "sess_2", "sess_3"),
+               names_to = "daily_session",
+               values_to = "session_complete")
+
+k99_shared_data_9 <- k99_shared_data_9[c("subject", "day_number", "daily_session",
+                                         "session_complete")]
+k99_shared_data_9 <- unique(k99_shared_data_9)
+
+ema_complete <- ema_grid %>%
+  left_join(k99_shared_data_9, by = c("subject", "day_number", "daily_session"))
+
+# there are some NAs because some did not have any sessions completed on a day
+ema_complete[is.na(ema_complete)] <- 0
+```
+
+
+```{r}
+ema_complete <- ema_complete %>%
+  group_by(subject, day_number) %>%
+  mutate(
+    num_completions = sum(session_complete), .groups = "drop"
+  ) %>%
+  slice(1)
+table(ema_complete$num_completions)
+```
+
+```{r}
+clr = "#5c677d"
+ema_dist_plot <- ggplot(ema_complete, aes(x = day_number, y = num_completions, 
+                                    fill = clr, color = clr)) +
+  geom_jitter(size = 2, alpha = 0.1, width = .35, height = .25) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", size = 7, color = "black") +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", size = 3, color = "black") +
+  theme_cowplot() +
+  scale_fill_manual(values = clr) +
+  scale_color_manual(values = clr) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(size = 16),
+      axis.title.x = element_text(size = 18),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size = 14),
+      axis.title.y = element_text(size = 18)
+    ) +
+  scale_x_continuous(breaks = seq(1, 14, by = 1)) +
+  scale_y_continuous(breaks = seq(0, 3, by = .5)) +
+  coord_cartesian(xlim = c(1, 14), ylim = c(-.25, 3.25)) +
+  labs(title = "", x = "Day Number", y = "Number of EMA Assessments Completed")
+ema_dist_plot
+```
+
+
+```{r}
+# ggsave("ema_dist_plot.jpeg", ema_dist_plot, device = "jpeg", width = 9, 
+#        height = 6, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

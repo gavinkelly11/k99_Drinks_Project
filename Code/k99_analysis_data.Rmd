@@ -1,0 +1,359 @@
+---
+title: "k99_analysis_data"
+author: "Gavin Kelly"
+date: "2025-06-19"
+output: html_document
+---
+
+This script is used to prepare the shared k99.2 data for analysis.
+
+## First we will explain the variables in the shared data set.
+
+Column 1: Variable to identify participants 1-250.
+
+Columns 2-62: EMA Assessment Variables.
+
+  stress_event: did a stressful event occur in the last 30 minutes? yes/no
+  
+  stress_event_type_: specific types of stressful events (yes/no) as well as
+  an overall variable with each type of stressful event included.
+  
+  *The next three variables also exist for PA and NA*
+  
+  stress_state: variable for stress level at time of assessment completion.
+  
+  stress_change_(alc or soft): if you were to consume (alc or soft) later today,
+  how would your stress change?
+  
+  stress_state_change: How has your stress changed since the last
+  assessment you completed?
+  
+  *the next three variables also exist for soft drinks. We capped responses at 10*
+  
+  alc_yday: Number of alcoholic drinks consumed yesterday.
+  
+  alc_today: Number of alcoholic drinks consumed today.
+  
+  alc_intend: Number of alcoholic drinks you intend to drink the rest of the day.
+  
+  thirst, hunger, tired, bored state: ratings of physiological states.
+  
+  alc_exp_: specific types of alcohol expectancies (yes/no) as well as
+  an overall variable with each type of alcohol expectancy included.
+  
+  alc_mot_: specific types of drinking motives (yes/no) as well as
+  an overall variable with each type of drinking motive included.
+  
+  alc_craving and soft_craving: Craving ratings for types of beverages.
+  
+  location: where participants were at time of assessment.
+  
+  social_context_: specific types of social contexts (yes/no) as well as
+  an overall variable with each possible social context included.
+  
+  alc_cue: whether alcohol is directly (e.g. bottle) or indirectly (e.g. TV ad) visible.
+  
+  responsibility: whether participants had any responsibilities right now, later
+  today, or tomorrow morning.
+
+Columns 63-79: Choice Task Variables (choice task completed once per assessment).
+
+  date and time: when the choice task was begun (and EMA assessment completed).
+  
+  trial: maximum of 160 trials (choices made) possibly completed after each EMA assessment.
+  
+  alc_position: which side of the screen the alcoholic beverage was on, with the soft
+  drink on the other side.
+  
+  alc_image and soft_image: which drinks were presented for each choice/trial.
+  
+  rating_alc and rating_soft: the baseline ratings of the drinks presented.
+  
+  response: whether the participant chose the alcoholic or non-alcoholic beverage for each trial.
+  
+  rt: how fast a choice was made in seconds.
+  
+  value_function: the difference in ratings between the alcoholic and 
+  non-alcoholic beverage (alc - soft).
+  
+  prop_alc_responses: the proportion of choices the participant made for alcohol
+  in a given assessment, aka one time completing the choice task.
+  
+  median_rt: the median response time in seconds for a given assessment.
+  
+  rt_fast_prop: the proportion of response times < 300ms for a subject across the whole study.
+  
+  time_of_day: whether the assessment was completed in the afternoon (8:00-18:00)
+  or the evening (18:00-8:00)
+
+Columns 80-83: DDM Parameters.
+  
+  drift: the drift rate parameter.
+  
+  alcbias: the alcohol bias parameter.
+  
+  B: the decision boundary parameter.
+  
+  nondectime: the non-decision time parameter.
+
+Columns 84-270: Baseline Variables.
+
+  progress: % of baseline completed.
+  
+  duration_minutes: how long the baseline took each participant to complete.
+  
+  finished: whether the participant fully completed the baseline.
+  
+  sex: Participants' sex assigned at birth.
+  
+  student: Whether the participant is a student.
+  
+  education: Education level of participants.
+  
+  employment: Employment classification of participants.
+  
+  audit_1, audit_2...: Scores for individual items of AUDIT survey.
+  
+  dmq_1, dmq_2...: Scores for individual items of DMQ survey.
+  
+  upps_1, upps_2...: Scores for individual items of UPPS survey.
+  
+  cerq_1, cerq_2...: Scores for individual items of CERQ survey.
+  
+  ers_1, ers_2...: Scores for individual items of ERS survey.
+  
+  alc01, alc02...: Ratings of each alcoholic drink.
+  
+  soft01, soft02...: Ratings of each non-alcoholic drink.
+  
+  end_date_string: The date when the baseline was completed.
+  
+  age: The age of each participant.
+  
+  audit_score: Sum score of individual audit items.
+  
+  audit_risk_class: low (0-3), risky (4-9), harmful (10-13), severe (14+)
+  
+  dmq_social, etc.: average scores for each DMQ subscale.
+  
+  upps_negative_urgency, upps_positive urgency: average scores for UPPS subscales.
+  
+  cerq_self_blame, etc.: average scores for each CERQ subscale.
+  
+  ers_persistence, etc.: average scores for each ERS subscale.
+  
+  race: variable with individual races, and multiple if more than one selected.
+  
+  gender: variable with multiple gender options, and multiple if more than one selected.
+  
+  sexuality: variable with multiple sexuality options, and multiple if more than one selected.
+
+The script is organized by sections, with one section for each model.
+
+## We will give an overview of each section of the script.
+
+First we filter the data, retaining only what we need for analysis. (lines 176-216)
+
+Then we prepare the data for the 4 primary models, stress event, stress state,
+NA state, PA state. (lines 217-243)
+
+We then prepare the data for the models 5-13 for anticipated change in emotion and
+perceived change in emotion. (lines 243-299)
+
+Finally, we prepare the data for the model that uses baseline predictors. (lines 300-341)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+library(dplyr)
+```
+
+```{r}
+#load the publicly available data
+# k99_shared_data <- read.csv("k99_shared_data.csv")
+```
+
+### Filter responses and overwrite Prop Alc Responses and Median rt Variables
+
+```{r}
+k99_shared_data <- k99_shared_data %>%
+  mutate(response = case_when(
+    rt < 0.3 ~ NA,
+    TRUE ~ response
+  ))
+k99_shared_data <- k99_shared_data %>%
+  group_by(subject, session) %>%
+  mutate(
+    prop_alc_responses = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    median_rt = median(rt, na.rm = T)
+  )
+```
+
+```{r}
+k99_shared_data <- k99_shared_data %>%
+  group_by(subject, session) %>%
+  slice(1)
+```
+
+Option: exclude people with prop fast rt (<300ms) > 10%. This removes 25 people.
+Just replace k99_shared_data with k99_slow_data in the next code chunk to use this.
+
+```{r}
+# k99_slow_data <- k99_shared_data %>%
+#   filter(rt_fast_prop < 0.1)
+```
+
+### Filter Data
+
+We will keep variables that are relevant for analysis. We will include rt_fast_prop,
+but will remove it for primary analyses, and may use it to filter later on (see line ).
+
+```{r}
+k99_filtered_data <- k99_shared_data[,names(k99_shared_data) %in% c("subject", "stress_event", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_state", "PA_state", "NA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "alc_yday", "soft_yday", "alc_today", "soft_today", "alc_intend", "soft_intend", "thirst_state", "hunger_state", "tired_state", "bored_state", "alc_exp_relaxed", "alc_exp_sociable", "alc_exp_buzz", "alc_exp_better_mood", "alc_exp_energetic", "alc_exp_hangover", "alc_exp_embarrassed", "alc_exp_be_rude", "alc_exp_nauseous_vomit", "alc_exp_injury", "alc_mot_coping", "alc_mot_social", "alc_mot_enhance", "alc_craving", "soft_craving", "location", "social_context_alone", "social_context_friend_roommate", "social_context_romantic_partner", "social_context_family", "social_context_coworker_classmate", "social_context_stranger", "social_context_other", "alc_cue", "responsibility", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "day_of_week", 'time_of_day', "median_rt", "prop_alc_responses", "rt_fast_prop", "B", "drift", "alcbias", "nondectime")]
+```
+
+Get data on the session level.
+
+## Stress binary event model
+
+```{r}
+k99_stress_binary_data <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_state", "PA_state", "NA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change",
+"stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+## Stress State model
+
+```{r}
+k99_stress_state_data <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "PA_state", "NA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+## NA State model
+
+```{r}
+k99_na_state_data <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "PA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+## PA State model
+
+```{r}
+k99_pa_state_data <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+## Prospective Change Models
+
+# Stress Change Alc
+
+```{r}
+k99_stress_change_alc <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+# Stress Change Soft
+
+```{r}
+k99_stress_change_soft <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_alc", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+# PA Change Alc
+
+```{r}
+k99_pa_change_alc <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_soft", "stress_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+# PA Change soft
+
+```{r}
+k99_pa_change_soft <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "NA_change_alc", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+# NA Change alc
+
+```{r}
+k99_na_change_alc <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_soft", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+# NA Change soft
+
+```{r}
+k99_na_change_soft <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "stress_state_change", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+## Perceived Change Models
+
+# Perceived Stress Change
+
+```{r}
+k99_perceived_stress_change <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "PA_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+# Perceived PA Change
+
+```{r}
+k99_perceived_pa_change <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "stress_state_change", "NA_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+# Perceived NA Change
+
+```{r}
+k99_perceived_na_change <- k99_filtered_data[,!names(k99_filtered_data) %in% c("stress_event", "stress_state", "NA_state", "PA_state", "stress_change_alc", "stress_change_soft", "PA_change_alc", "PA_change_soft", "NA_change_alc", "NA_change_soft", "PA_state_change", "stress_state_change", "stress_event_type_argument", "stress_event_type_social_dissapointment", "stress_event_type_difficulty_work_school", "stress_event_type_difficulty_home", "stress_event_type_health_issue", "stress_event_type_neg_event_to_others", "stress_event_type_other", "stress_event_intensity", "stress_event_type_overall", "alc_exp_overall", "alc_mot_overall", "social_context_overall", "rt_fast_prop", "nondectime")]
+```
+
+## Baseline Characteristics Model
+
+We will not include audit risk class.
+
+```{r}
+#keep variables that are relevant for analysis
+k99_baseline_predictors <- k99_shared_data[,names(k99_shared_data) %in% c("subject", "median_rt",  "prop_alc_responses", "B", "drift", "alcbias",
+"age", "student", "audit_score", "dmq_social", "dmq_coping", "dmq_enhancement", "dmq_conformity", "upps_negative_urgency", "upps_positive_urgency", "cerq_self_blame", "cerq_acceptance", "cerq_rumination", "cerq_positive_refocusing", "cerq_planning_refocusing", "cerq_reappraisal", "cerq_perspective", "cerq_catastrophizing", "cerq_blaming_others", "ers_persistence", "ers_sensitivity", "ers_intensity", "race", "gender", "sexuality", "sex", "education", "employment")]
+```
+
+## Saving all 14 Data Frames as .csv files for input to the models
+
+```{r}
+# write.csv(k99_stress_binary_data, "k99_stress_binary_data.csv", row.names = F)
+# 
+# write.csv(k99_stress_state_data, "k99_stress_state_data.csv", row.names = F)
+# 
+# write.csv(k99_na_state_data, "k99_na_state_data.csv", row.names = F)
+# 
+# write.csv(k99_pa_state_data, "k99_pa_state_data.csv", row.names = F)
+# 
+# write.csv(k99_stress_change_alc, "k99_stress_change_alc.csv", row.names = F)
+# 
+# write.csv(k99_stress_change_soft, "k99_stress_change_soft.csv", row.names = F)
+# 
+# write.csv(k99_na_change_alc, "k99_na_change_alc.csv", row.names = F)
+# 
+# write.csv(k99_na_change_soft, "k99_na_change_soft.csv", row.names = F)
+# 
+# write.csv(k99_pa_change_alc, "k99_pa_change_alc.csv", row.names = F)
+# 
+# write.csv(k99_pa_change_soft, "k99_pa_change_soft.csv", row.names = F)
+# 
+# write.csv(k99_perceived_stress_change, "k99_perceived_stress_change.csv", row.names = F)
+# 
+# write.csv(k99_perceived_na_change, "k99_perceived_na_change.csv", row.names = F)
+# 
+# write.csv(k99_perceived_pa_change, "k99_perceived_pa_change.csv", row.names = F)
+# 
+# write.csv(k99_baseline_predictors, "k99_baseline_predictors.csv", row.names = F)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,168 @@
+---
+title: "k99_choicetask_data"
+author: "Gavin Kelly"
+date: "2025-06-03"
+output: html_document
+---
+
+This is the data processing script for the k99 choicetask data.
+
+I first rename the variables. (lines 39-49)
+I then add rt and day of week variables, and change alc position to a chr. (lines 53-101)
+I then review the sanity checks and final df, and save it to files (commented out). (lines 104-118)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+```
+
+## Load Packages
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(tidyr)
+library(psych)
+```
+
+## Loading Data
+
+```{r}
+choicetask_data <- read.csv("choicetask_data.csv")
+baseline_data <- read.csv("baseline_data_processed.csv")
+```
+
+## View Variable Names
+
+```{r}
+# colnames(choicetask_data)
+```
+
+First we can rename the variables.
+
+```{r}
+choicetask_data <- rename(choicetask_data, computer_platform = computer.platform)
+choicetask_data <- rename(choicetask_data, trial = trialnum)
+choicetask_data <- rename(choicetask_data, alc_position = alcPosition)
+choicetask_data <- rename(choicetask_data, alc_image = alcImage)
+choicetask_data <- rename(choicetask_data, rating_alc = ratingAlc)
+choicetask_data <- rename(choicetask_data, soft_image = softImage)
+choicetask_data <- rename(choicetask_data, rating_soft = ratingSoft)
+```
+
+
+Initially looking at the data, we need to change position to a left/right chr,
+we need to change the latency to seconds rather than milliseconds,
+and we could calculate a rating difference between the two options.
+
+```{r}
+choicetask_data$rt <- choicetask_data$latency / 1000
+choicetask_data$latency <- NULL
+
+choicetask_data$alc_position <- as.character(choicetask_data$alc_position)
+choicetask_data <- choicetask_data %>%
+  mutate(
+    alc_position = case_when(
+      alc_position == "1" ~ "left",
+      TRUE ~ "right"
+    )
+  )
+
+choicetask_data$value_function <- choicetask_data$rating_alc - choicetask_data$rating_soft
+```
+
+If the response time is greater than 4 seconds, we will set the RT and response to NA.
+
+```{r}
+choicetask_data <- choicetask_data %>%
+  mutate(
+    response = case_when(
+      rt > 4 ~ NA,
+      response == "0" ~ NA,
+      TRUE ~ response
+    )
+  )
+
+choicetask_data <- choicetask_data %>%
+  mutate(
+    rt = case_when(
+      rt > 4 ~ NA,
+      TRUE ~ rt
+    )
+  )
+
+# It appears there are 4307 responses that exceeded 4 seconds.
+# This means there are 966741 valid responses (sum(!is.na(choicetask_data$response)))
+```
+
+We can also calculate day of week using the lubridate package and the date variable.
+
+```{r}
+choicetask_data$day_of_week <- wday(choicetask_data$date, label = T)
+```
+
+Add vars for prop alc responses and median rt.
+
+```{r}
+choicetask_data <- choicetask_data %>%
+  group_by(subject, session) %>%
+  mutate(
+    prop_alc_responses = sum(response == "alc", na.rm = T) / 
+      (sum(response == "alc", na.rm = T) + sum(response == "soft", na.rm = T)),
+    median_rt = median(rt, na.rm = T)
+  )
+```
+
+We will add variable counting the prop rt <300ms for each session
+
+```{r}
+choicetask_data <- choicetask_data %>%
+  group_by(subject) %>%
+  mutate(
+    rt_fast_prop = sum(rt < .3, na.rm = T) / sum(!is.na(response), na.rm = T)
+  )
+```
+
+Add afternoon/evening variable
+
+```{r}
+choicetask_data <- choicetask_data %>%
+  mutate(
+    hour = hour(hms(time)),
+    time_of_day = case_when(
+      hour >= 0 & hour < 8 ~ "evening",
+      hour >= 8 & hour < 18 ~ "afternoon",
+      hour >= 18 & hour < 24 ~ "evening",
+      TRUE ~ "other"
+    )
+  )
+choicetask_data$hour <- NULL
+```
+
+
+```{r}
+# head(choicetask_data)
+```
+
+I also double checked that computer_platform, date, time rating_alc, rating_soft, subject,
+session, trial, alc_position, alc_image, and soft_image all contained only the 
+expected data. Meaning that it was in the expected range, only expected values, with no NA values.
+
+There are 800 NA responses in the rt variable, and 5104 in the response variable.
+
+Now we can save the choicetask data as a csv.
+
+```{r}
+# write.csv(choicetask_data, "choicetask_data_processed.csv", row.names = F)
+```
+
+
+
+
+
+
+
+
+
+

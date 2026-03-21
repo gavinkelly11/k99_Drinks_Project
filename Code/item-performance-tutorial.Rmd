@@ -1,0 +1,1462 @@
+---
+title: "Tutorial document for the paper 'Understanding EMA Data: A Tutorial on Exploring Item Performance in Ecological Momentary Assessment Data'"
+author: 
+  - Björn S. Siepe
+  - Carlotta L. Rieble
+  - Rayyan Tutunji
+  - Ricarda K.K. Proppert
+  - Aljoscha Rimpler
+  - Julius März
+  - Eiko I. Fried
+date: "`r Sys.Date()`"
+csl: apa.csl
+output: 
+  html_document:
+    code_folding: hide
+    theme: paper
+    toc: true
+    toc_float: true
+    df_print: kable
+    code_download: true
+---
+
+
+
+```{css zoom-lib-src, echo = FALSE}
+/* https://stackoverflow.com/questions/40401680/how-to-zoom-in-on-plots-inside-an-rmarkdown-presentation */
+script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"
+.zoomDiv {
+  opacity: 1;
+  width: auto;
+  border: 1px solid white;
+  border-radius: 5px;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin-right: -50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0px 0px 50px #888888;
+  z-index: 50;
+  overflow: auto;
+  max-height: 100%;
+  background-color: white; /* Add this line to set a white background */
+}
+
+.zoomImg {
+  width: 100%;
+}
+
+```
+
+```{js zoom-jquery, echo = FALSE}
+$(document).ready(function() {
+  $('body').prepend('<div class=\"zoomDiv\"><img src=\"\" class=\"zoomImg\"></div>');
+  // onClick function for all plots (img's)
+  $('img:not(.zoomImg)').click(function() {
+    $('.zoomImg').attr('src', $(this).attr('src')).css({width: '100%'});
+    $('.zoomDiv').css({opacity: '1', width: 'auto', border: '1px solid white', borderRadius: '5px', position: 'fixed', top: '50%', left: '50%', marginRight: '-50%', transform: 'translate(-50%, -50%)', boxShadow: '0px 0px 50px #888888', zIndex: '50', overflow: 'auto', maxHeight: '100%', backgroundColor: 'white'});
+  });
+  // onClick function for zoomImg
+  $('img.zoomImg').click(function() {
+    $('.zoomDiv').css({opacity: '0', width: '0%'});
+  });
+});
+```
+
+```{r analysis-preferences, include = FALSE, echo = FALSE, message = FALSE}
+# Seed for rng
+set.seed(2022)
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(out.width = "80%")
+knitr::opts_chunk$set(out.height = "80%")
+
+
+```
+
+# Background
+
+This is a supplementary document for the manuscript 'Understanding EMA Data: A Tutorial on Exploring Item Performance in Ecological Momentary Assessment Data' by [Siepe et al. (2024)](https://osf.io/yf3up/). This script contains tutorial code to reproduce the figures in the manuscript based on synthetic simulated time series data. We provide this background information such that interested readers can understand and adapt our code to their own data. The other code supplement, called 'Full Report', contains all code we used on the real WARN-D data in the manuscript, as well as additional analyses.
+
+As you will notice, the figures created in this document only reproduce the visual appearance of the figures in the manuscript, but not the true associations or patterns in our data. This results from the synthetic data set being created independent from the actual WARN-D data.
+
+# Preparation
+
+We load (and, if they are missing, automatically install) all relevant packages and additionally load helper functions from `aux_funs.R`.
+
+```{r load-pkgs}
+# We first install the package management package pacman
+if (!require("pacman")) install.packages("pacman")
+
+# This function either loads or installs all relevant packages
+pacman::p_load(
+  tidyverse, 
+  here, 
+  ggokabeito,
+  cowplot,
+  lmerTest,
+  treemapify,
+  knitr,
+  colorspace,
+  readr,
+  ggrepel,
+  ggside,
+  kableExtra,
+  moments,
+  sysfonts,
+  showtext,
+  ggrain)
+
+# Set folder structure at Rproject level
+# This means that we can use relative paths (such as "data/...")
+# instead of using absolute paths ("C:User/Name/project/data/...")
+here::i_am("item-validation.Rproj")
+
+# Load the auxiliary functions
+source(here::here("scripts/aux_funs.R"))
+
+# Check if relevant folders exist - if not, create them
+# Define directories
+data_dir <- here("data")
+figures_dir <- here("figures")
+figures_mock_dir <- here("figures", "mock_figures")
+output_dir <- here("output")
+
+# Check if directories exist, and create them if they don't
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
+
+if (!dir.exists(figures_dir)) {
+  dir.create(figures_dir, recursive = TRUE)
+}
+
+if (!dir.exists(figures_mock_dir)) {
+  dir.create(figures_mock_dir, recursive = TRUE)
+}
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+```
+
+As you will see below, we make heavy use of `tidyverse` functions such as `dplyr::mutate` or `tidyr::pivot_longer` in our scripts. We believe that this style of coding is helpful for readability. If you are unfamiliar with these tidyverse functions, please consider the helpful online resources on the `tidyverse` [here](https://www.tidyverse.org/learn/).
+
+## Synthetic time series data
+
+We created a 'mock' time series data set that allows to reproduce the figures in the main manuscript and to play around with our code. The associations in the mock data set do not mimic any associations in the real data. Therefore, all results below are entirely arbitrary - they just serve as a technical illustration. The mock data set was created using the `mock_data_creation.R` script.
+
+```{r load-ts-data}
+data_long <- read.csv(here("data/mock_data.csv"))
+```
+
+The mock data set consists of the following columns:
+
+```{r mock-codebook}
+# Reading in the csv file with codebook descriptions for the mock data
+codebook_mock <- readr::read_delim(here("data/codebook_mock_data.csv"), 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+# Create a very simple table in latex format
+# we use booktabs here to left-align the table in the output
+codebook_mock %>%
+  # setup table
+  knitr::kable() %>%
+  # simple table with font of our choice, left align
+  kableExtra::kable_minimal(html_font = "Source Sans Pro", position = "left")
+```
+
+All codebooks for the real data used in the manuscript can be found in the [OSF project](https://osf.io/2jd9h/) connected to the WARN-D protocol paper (Fried et al., 2023).
+
+## Synthetic cross-sectional data
+
+We additionally created a mock cross-sectional data set that mimics the structure of the baseline data used in the manuscript. It was also created using the `mock_data_creation.R` script. We use this data set to reproduce [Figure 10](#fig10).
+
+```{r load-cs-data}
+data_baseline <- read.csv(here("data/data_baseline_mock.csv"))
+```
+
+## Define some variable sets
+
+We now define some sets of variables in character vectors that we will repeatedly need for later analyses:
+
+-   `ema_vars` contains all variables asked 4x/day
+-   `ema_mh_vars` contains all variables asked 4x/day on a 1-7 Likert scale that infer about some psychological state
+-   `rel_vars` contains some selected EMA variables used for illustration
+-   `rel_lik_vars` contains all variables in `ema_mh_vars` and some variables which are only used in the evening surveys of WARN-D
+
+```{r define-vars}
+ema_vars <- c(
+  "irritable",
+  "ruminate",
+  "relaxed",
+  "nervous",
+  "overwhelm",
+  "stressed",
+  "cheerful",
+  "sad",
+  "motivated",
+  "tired",
+  "activity_cat",
+  "act_enjoy",
+  "actesc",
+  "online_cat",
+  "online_enjoy",
+  "offline_cat",
+  "location",
+  "offline_enjoy"
+)
+
+ema_mh_vars <- c(
+  "irritable",
+  "ruminate",
+  "relaxed",
+  "nervous",
+  "overwhelm",
+  "stressed",
+  "cheerful",
+  "sad",
+  "motivated",
+  "tired"
+)
+
+rel_vars <- c("stressed", "relaxed", "irritable", "cheerful", "sad")
+
+rel_lik_vars <- c(
+  ema_mh_vars,
+  "concentr_e",
+  "outlook_e",
+  "emo_reg_e",
+  "useful_e",
+  "anhedonia_e",
+  "connect_e",
+  "depressed_e",
+  "coping_e"
+)
+```
+
+# Recreating Figure 1: Raincloud Plots
+
+To better understand these summary statistics, we can look at the distribution of person-specific means for some of the items. In this figure, every individual data point is a person-specific mean. The density and the boxplot then represent the aggregate distributions. The function which we created here is inspired by a [tutorial](https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-and-how-to-create-them-with-ggplot2/) by Cédric Scherer.
+
+```{r plot-raincloud}
+# We define all variables that we want to use in the raincloud plot
+rc_items <- c(
+  "sad",
+  "irritable",
+  "ruminate",
+  "nervous",
+  "overwhelm",
+  "stressed",
+  "tired",
+  "motivated",
+  "relaxed",
+  "cheerful"
+)
+
+# We commonly use the colorblind-friendly Okabe-Ito palette here, which only
+# has 9 colors. To use this palette with 10 items, we add another color.
+# We also use a custom order for the Palette, which looks a bit nicer to us
+palette_okabe_enhanced <-
+  c(ggokabeito::palette_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)), "#882E72")
+
+
+# We create two separate plots with 5 items each for easier visibility
+plot_rc1 <- data_long %>%
+  # calculate grouped individual means
+  group_by(user_id, item) %>%
+  # calculate person-specific mean across the whole time series
+  summarize(imean = mean(answer_id, na.rm = TRUE)) %>%
+  # remove the grouping
+  ungroup() %>%
+  # use first five items for upper row of the plot
+  filter(item %in% rc_items[1:5]) %>%
+  # recode the item as a factorial variable
+  # this makes it easier to sort it in the next step
+  mutate(item = as.factor(item)) %>%
+  # reorder the items by the median of individual means (imean)
+  # this gives a nice order to them visually
+  # such that items with higher means appear later
+  mutate(item = forcats::fct_reorder(item, imean, 
+                                     .fun = "median", 
+                                     .na_rm = TRUE)) %>%
+  ggplot(aes(
+    x = item,
+    y = imean,
+    fill = item,
+    color = item
+  )) +
+  # use our custom-made function for raincloud plots
+  geom_raincloud() +
+  # Use the first 5 values of our custom color scale
+  scale_fill_manual(values = palette_okabe_enhanced[1:5]) +
+  scale_color_manual(values = palette_okabe_enhanced[1:5]) +
+  # remove legend
+  theme(legend.position = "none") +
+  # remove x axis label
+  labs(x = "", y = "iMean")
+
+# Same as the first plot, but for the next 5 items
+plot_rc2 <- data_long %>%
+  group_by(user_id, item) %>%
+  summarize(imean = mean(answer_id, na.rm = TRUE)) %>%
+  ungroup() %>%
+  filter(item %in% rc_items[6:10]) %>%
+  mutate(item = as.factor(item)) %>%
+  mutate(item = forcats::fct_reorder(item, imean,
+                                     .fun = "median", .na_rm = TRUE)) %>%
+  ggplot(aes(
+    x = item,
+    y = imean,
+    fill = item,
+    color = item
+  )) +
+  geom_raincloud() +
+  scale_fill_manual(values = palette_okabe_enhanced[6:10]) +
+  scale_color_manual(values = palette_okabe_enhanced[6:10]) +
+  theme(legend.position = "none") +
+  labs(x = "",
+       y = "iMean")
+
+# combine the plots with cowplot in a two-row plot
+rc_grid <- cowplot::plot_grid(plot_rc1, plot_rc2, nrow = 2)
+
+# Save as .svg file with explicit size
+ggsave(
+  filename = "rc_grid_mock.svg",
+  rc_grid,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 16,
+  height = 14,
+  units = c("cm")
+)
+
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics(here("figures/mock_figures/rc_grid_mock.svg"), error = FALSE)
+```
+
+As an alternative to our custom `geom_raincloud()` function, you can use the `geom_rain` function in the `ggrain` package to create a raincloud plot.
+
+# Recreating Figure 2: Modality
+
+To get an insight into the modality of individual response distributions, we can use a modality estimation technique by Haslbeck et al. (2023). This is an automated way of checking if an empirical distribution has more than one mode, or, in other words, more than one peak. Because the items were measured on a 1-7 Likert scale, the modality estimation likely underestimates \`\`true'' modality. The following code chunks can be used to reproduce Figure 2 in the manuscript. We first estimate the modality using the adapted function from Haslbeck et al. (2023).
+
+```{r est-modality}
+# Pivot data wider such that each variable is in its own column
+data_wide <- data_long %>%
+  filter(item %in% ema_mh_vars) %>%
+  pivot_wider(names_from = item,
+              values_from = answer_id,
+              values_fn = mean)
+
+# estimate modality
+dens_res <- est_density(data_wide, vars = ema_mh_vars)
+
+# create table with results for number of modes and skewness
+colnames(dens_res$mode) <- paste0(ema_mh_vars, "_modes")
+colnames(dens_res$skew) <- paste0(ema_mh_vars, "_skew")
+
+```
+
+We can then plot the number of modes for different items in the plot below. In the code below, we make repeated use of the '.' inside a an operation. For example, this code snippet:
+
+```         
+data %>% 
+    mutate(across(contains("modes"),
+                ~ ifelse(. > 3, "4+", .)))
+```
+
+We modify (with `mutate()`) `across()` each column that `contains()` the string "modes". We use the `ifelse()` function to check if each value in the selected columns is greater than 3. If a value is greater than 3, it replaces it with "4+", otherwise it keeps the original value. The `.` inside the function works as a placeholder for each value that is evaluated, in other words, for each column which the function is applied to.
+
+```{r plot-modality}
+plot_n_modes <- dens_res$mode %>%
+  # convert to data frame for easier data handling
+  as.data.frame() %>%
+  # convert rownames to column name (it contains the IDs)
+  tibble::rownames_to_column(var = "user_id") %>%
+  # Lump factors with low frequency
+  # this means: across all columns that contain the string "modes"
+  # check if modes >3
+  # if true, categorize as "4+"
+  # if not, keep as is
+  mutate(across(contains("modes"),
+                ~ ifelse(. > 3, "4+", .))) %>%
+  # add invisible space to label for nicer layout
+  # this just adds white space after each number in the "modes" cols
+  mutate(across(contains("modes"),
+                ~ ifelse(. != "4+", paste0(., " "), .))) %>%
+  # convert them all to factorial variables              
+  mutate(across(contains("modes"),
+                ~ as.factor(.))) %>%
+  # give nicer names (new name on the left)            
+  rename(
+    "Irritable" = "irritable_modes",
+    "Cheerful" = "cheerful_modes",
+    "Relaxed" = "relaxed_modes",
+    "Sad" = "sad_modes",
+    "Stressed" = "stressed_modes",
+    "Over-\nwhelmed" = "overwhelm_modes",
+    "Ruminate" = "ruminate_modes",
+    "Motivated" = "motivated_modes",
+    "Nervous" = "nervous_modes",
+    "Tired" = "tired_modes"
+  ) %>%
+  # convert data frame to a long format for ggplot
+  pivot_longer(cols = !user_id, names_to = "var") %>%
+  ggplot(aes(x = value, group = value, fill = value)) +
+  # bar plot for number of modes
+  geom_bar() +
+  # Create facets by variable in two rows
+  facet_wrap( ~ var, nrow = 2) +
+  theme_warnd() +
+  # our favorite Okabe-Ito order
+  scale_fill_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  # Change facet text styling and remove legend
+  theme(legend.position = "none",
+        strip.text = element_text(size = 8, face = "plain")) +
+  labs(y = "",
+       x = "Number of Modes per Item")
+
+
+# Save the plot as svg
+ggsave(
+  filename = "plot_n_modes12_mock.svg",
+  plot_n_modes,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 16,
+  height = 10,
+  units = c("cm")
+)
+```
+
+We can additionally look at some example distributions for different participants. This can be helpful in real applications to see if there are common response patterns and to gauge inter-individual differences in response patterns.
+
+```{r plot-example-dist}
+dens_examples <- dens_res$mode %>%
+  as.data.frame() %>%
+  # add the rowname as user_id again
+  tibble::rownames_to_column(var = "user_id") %>%
+  # Combine factors with low frequency (in case a lot of modes were estimated)
+  mutate(stress_modescat = ifelse(stressed_modes > 3, "4+", stressed_modes)) %>%
+  # convert to factor
+  mutate(across(contains("modes"),
+                ~ as.factor(.))) %>%
+  # just use the first six users
+  filter(user_id < 7) %>%
+  # convert user_id to a numerical variable
+  mutate(user_id = as.double(user_id)) %>%
+  # only select relevant variables
+  select(user_id, stressed_modes, stress_modescat)
+
+# Create the barplot
+plot_example_modes <- data_wide %>%
+  # use the first six participants
+  filter(user_id < 7) %>%
+  # attach the information about the number of modes from above
+  left_join(dens_examples, by = "user_id") %>%
+  select(user_id, stressed) %>%
+  # convert user_id back to a character column again for plotting
+  mutate(user_id = as.character(user_id)) %>%
+  # create proper naming that mirrors the manuscript
+  mutate(
+    id_label = case_match(
+      user_id,
+      "1" ~ "Participant A",
+      "2" ~ "Participant B",
+      "3" ~ "Participant C",
+      "4" ~ "Participant D",
+      "5" ~ "Participant E",
+      "6" ~ "Participant F"
+    )
+  ) %>%
+  ggplot(aes(x = as.factor(stressed))) +
+  # colored bar plot 
+  geom_bar(position = "dodge", fill = "#0072B2") +
+  theme_warnd() +
+  # remove legend
+  theme(legend.position = "none") +
+  scale_x_discrete(breaks = 1:7, labels = 1:7) +
+  # two-row plot for different participants
+  facet_wrap( ~ id_label,
+              nrow = 2) +
+  # change spacing and text of panels a bit            
+  theme(
+    strip.text.x = element_text(size = 8, face = "plain"),
+    panel.spacing.x = unit(1.3, "lines"),
+    panel.spacing.y = unit(1.3, "lines")
+  ) +
+  labs(x = "Response Category Item: Stressed",
+       y = "count")
+
+
+# save as svg
+ggsave(
+  filename = "plot_example_modes_mock.svg",
+  plot_example_modes,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 14,
+  height = 10,
+  units = c("cm")
+)
+
+
+```
+
+As in the manuscript, we can then again combine both modality plots into one:
+
+```{r plot-modes-comb}
+plot_modality <-
+  cowplot::plot_grid(
+    # select the first plot
+    plot_example_modes,
+    # then add an empty plot
+    # this is a trick to create some space between plots
+    NULL,
+    # add the second plot
+    plot_n_modes,
+    nrow = 1,
+    labels = c("A", "", "B"),
+    # Set the relative widths of the plots and the empty space
+    # 1st and 3rds plots have the same width
+    # empty space is 0.1 times the width of the plots
+    rel_widths = c(1, 0.1, 1)
+  )
+
+# save as svg
+ggsave(
+  filename = "plot_modality_mock.svg",
+  plot_modality,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 18,
+  height = 10,
+  units = c("cm"
+  )
+)
+```
+
+```{r}
+knitr::include_graphics(here("figures/mock_figures/plot_modality_mock.svg"), error = FALSE)
+```
+
+# Recreating Figure 3: Across activities
+
+We now investigate item responses across different contexts. We can look at example items by color-coding the responses and categorize them by activity (on the y-axis). Conceptually, this plot is made up of multiple horizontal bar charts that all indicate relative answer proportions for a given activity. The following code reproduces Figure 3 in the manuscript. We use the custom function `gg_likact` to create the horizontal bar plots. Its structure is explained in the `aux_funs.R` file.
+
+```{r plot-activity}
+# All activity categories
+act_cat <- c(
+  "Social",
+  "Physical",
+  "Active Leisure",
+  "Passive Leisure",
+  "Study/Work",
+  "Chores",
+  "On way",
+  "Eating",
+  "Other",
+  "Nothing"
+)
+
+# We order the factor levels of activity by their frequency
+# such that the most frequently selected activity is plotted at the top
+act_levels <- data_long %>%
+  filter(item == "activity") %>%
+  # Use the labels defined above
+  mutate(answer_id = factor(answer_id,
+                            labels = act_cat)) %>%
+  # Reorder by frequency of response
+  mutate(answer_id = reorder(answer_id, answer_id,
+                             FUN = length,
+                             decreasing = FALSE)) %>%
+  # only extract answer_ids of activity
+  pull(answer_id) %>%
+  # obtain levels
+  levels()
+
+
+```
+
+We now create this plot for a single item ('Cheerful') as an example. This can of course be repeated for multiple items, as done in the manuscript.
+
+```{r plot-act-happy}
+plot_cheerful_act <- data_long %>%
+  # only select relevant item and the activity item
+  filter(item == "cheerful" | item == "activity") %>%
+  # group by all relevant variables
+  group_by(user_id, date, prompt_num, item) %>%
+  # introduce id for multiple choice activity selection
+  # i.e., this indicates if a person selected multiple activities in a given survey
+  mutate(act_id = row_number()) %>%
+  ungroup() %>%
+  # pivot wider such that each item is in its own column
+  pivot_wider(
+    id_cols = c(user_id, date, prompt_num, act_id),
+    names_from = item,
+    values_from = answer_id
+  ) %>%
+  # remove missing values in the key variables
+  filter(!is.na(cheerful) & !is.na(activity)) %>%
+  # label activity as defined above
+  mutate(activity = factor(activity,
+                           labels = act_cat)) %>%
+  # relevel the factor according to frequency
+  mutate(activity = forcats::fct_relevel(activity, act_levels)) %>%
+  # fill based on the response to the cheerful item
+  ggplot(aes(y = activity, fill = as.factor(cheerful))) +
+  # apply custom function
+  gg_likact() +
+  # change plot margins
+  theme(plot.margin = margin(0.5, 0.5, 0.5, 0, "cm")) +
+  labs(x = "Cheerful")
+
+# save as svg
+ggsave(
+  filename = "plot_cheerful_act_mock.svg",
+  plot_cheerful_act,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 14,
+  height = 10,
+  units = c("cm")
+)
+
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/plot_cheerful_act_mock.svg"), error = FALSE)
+```
+
+# Recreating Figure 4: Activity/Time-of-Day Effects
+
+Here, we take a look at multiple items at the same time, across specific situations: Being social vs. studying/working. We calculate mean responses for multiple items for each of these activities to see if there are any apparent patterns.
+
+```{r plot-socialwork}
+social_work_plot <- data_long %>%
+  # Only choose relevant items and the activity item
+  filter(item %in% ema_mh_vars | item == "activity") %>%
+  group_by(user_id, date, prompt_num, item) %>%
+  # introduce id for multiple choice activity selection
+  # i.e., this indicates if a person selected multiple activities in a given survey
+  mutate(act_id = row_number()) %>%
+  ungroup() %>%
+  # wider data makes filtering and mutating activity easier
+  # then, each item has its own column, which contains the numeric responses from answer_id
+  pivot_wider(
+    id_cols = c(user_id, date, prompt_num, act_id),
+    names_from = item,
+    values_from = answer_id
+  )  %>%
+  # only choose social or study/work, indicated by these numerical indicators
+  filter(activity == 1 | activity == 5) %>%
+  # convert activity to a factor and label it
+  mutate(activity = factor(activity,
+                           labels = c("Social", "Study/Work"))) %>%
+  # pivot longer such that answer_ids are in a single column again
+  pivot_longer(
+    cols = all_of(ema_mh_vars),
+    names_to = "item",
+    values_to = "answer_id"
+  ) %>%
+  # Create grouped summaries
+  group_by(activity, item) %>%
+  # some generic summary functions
+  dplyr::summarize(
+    mean = mean(answer_id, na.rm = TRUE),
+    sd = sd(answer_id, na.rm = TRUE),
+    # n() just counts the number of observations
+    n = n(),
+    # calculate the generic standard error
+    se = sd / sqrt(n)
+  ) %>%
+  ggplot() +
+  # We explicitly add standard errors to represent uncertainty here
+  geom_linerange(
+    aes(
+      # for proper inference, we would need to account for multiple
+      # testing here 
+      xmin = mean - 1.96 * se,
+      xmax = mean + 1.96 * se,
+      y = item,
+      col = activity,
+      fill = activity
+    ),
+    # reduce overplotting
+    alpha = 0.9
+  ) +
+  # add points, reduce alpha to make them more visible
+  geom_point(aes(
+    y = item,
+    col = activity,
+    fill = activity,
+    x = mean
+  ),
+  alpha = 0.9) +
+  theme_warnd() +
+  theme(legend.title = element_text(face = "plain")) +
+  # add our favorite colors again
+  scale_fill_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  scale_color_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  # proper x-axis scaling
+  scale_x_continuous(limits = c(1, 7), breaks = 1:7) +
+  labs(x = "Mean",
+       y = "",
+       fill = "Activity",
+       col = "Activity")
+
+# save as svg
+ggsave(
+  "social_work_plot_mock.svg",
+  social_work_plot,
+  path = here("figures/mock_figures/"),
+  device = "svg",
+  height = 5,
+  width = 5
+)
+```
+
+To better understand the differences between the four different beeps/prompts during the day, we can look at the distributions of some example items during the four beeps of the day. We can again visualize this with dot plots to see differences in means between the beeps. The almost invisible horizontal lines around the points indicate the $95$-% CIs (which, again, do not account for multiple testing).
+
+```{r plot-tod}
+plot_beepeffect_dot <- data_long %>%
+  # filter to only include items of interest
+  filter(item %in% ema_mh_vars) %>%
+  # replace the numerical prompt indicator with the corresponding times of the day
+  mutate(
+    prompt_num = case_when(
+      prompt_num == 1 ~ "10:00 am",
+      prompt_num == 2 ~ "01:45 pm",
+      prompt_num == 3 ~ "05:30 pm",
+      prompt_num == 4 ~ "09:15 pm"
+    )
+  ) %>%
+  # correct ordering of the factor 
+  mutate(prompt_num = factor(
+    prompt_num,
+    levels = c("10:00 am",
+               "01:45 pm",
+               "05:30 pm",
+               "09:15 pm")
+  )) %>%
+  # convert item to a factor for easier plotting
+  mutate(item = as.factor(item)) %>%
+  # calculate grouped summary statistics for each item at each beep time
+  group_by(item, prompt_num) %>%
+  summarize(
+    mean = mean(answer_id, na.rm = TRUE),
+    sd = sd(answer_id, na.rm = TRUE),
+    # count the number of responses
+    n = n(),
+    # calculate the generic standard error of the mean
+    se = sd / sqrt(n)
+  ) %>%
+  ungroup() %>%
+  # slight renaming for the plot
+  mutate(item = gsub("overwhelm", "overwhelmed", item)) %>%
+  ggplot(aes(
+    y = item,
+    col = prompt_num,
+    fill = prompt_num,
+    x = mean
+  )) +
+  # add the standard error to account for uncertainty
+  geom_linerange(aes(xmin = mean - 1.96 * se,
+                     xmax = mean + 1.96 * se), alpha = 0.9) +
+  # increase alpha to avoid overplotting
+  geom_point(alpha = 0.9) +
+  theme_warnd() +
+  # add our favorite colours again
+  scale_fill_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  scale_color_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  scale_x_continuous(limits = c(1, 7), breaks = 1:7) +
+  labs(x = "Mean",
+       y = "",
+       fill = "Beep Time",
+       col = "Beep Time")
+```
+
+Now we can combine the plots again:
+
+```{r plot-comb-act-tod}
+plot_social_beepeffect <-
+  # create a grid of the two plots
+  plot_grid(
+    # take the plot as we created it, but move the legend
+    # and remove the x-axis title because we already have it in the second plot
+    social_work_plot + theme(
+      legend.position = "right",
+      axis.title.x = element_blank(),
+      legend.justification = c(0, 1)
+    ),
+    # add the other plot and also switch legend to the right side
+    plot_beepeffect_dot + theme(
+      legend.position = "right",
+      legend.justification = c(0, 1)
+    ),
+    # align them "v"ertically in two rows
+    nrow = 2,
+    align = "v",
+    labels = c("A", "B")
+  )
+
+# save as svg
+ggsave(
+  filename = "plot_social_beepeffect_mock.svg",
+  plot_social_beepeffect,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 13,
+  height = 12,
+  units = c("cm")
+)
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/plot_social_beepeffect_mock.svg"), error = FALSE)
+```
+
+# Recreating Figure 5: Group-Level Change Over Time
+
+Instead of investigating individuals, we now zoom into how average item responses across all participants develop across the data collection period. To visualize how the daily average of responses has changed over time, we visualize the average daily EMA responses over time (solid lines) and their overall mean across all time points (dotted line). Such a plot can also be helpful to see the extent of daily fluctuations or seasonal patterns.
+
+Related to this, such plots may help uncovering the so-called 'initial elevation phenomenon' (Anvari et al., 2022). Participants in EMA studies sometimes seemingly tend to give higher responses to self-reports in the very beginning of the assessment period. This may be especially relevant for items with a negative valence.
+
+In the following code chunk, we recreate Figure 5.
+
+```{r plot-change}
+# Create an indicator for mondays in the data
+day_ind <- data_long %>%
+  group_by(day_num, weekday, cohort) %>%
+  # create a new variable 'monday_ind' that indicates whether the weekday is Monday
+  # if the weekday is not Monday, 'monday_ind' is set to NA
+  # making sure that day_num is in the correct numerical format
+  mutate(day_num = as.numeric(day_num)) %>%
+  mutate(monday_ind = ifelse(weekday == "Mon", day_num, NA)) %>%
+  # get all unique day number and monday indicator combinations
+  distinct(day_num, monday_ind) %>%
+  ungroup()
+
+# Setup the plot across cohorts
+plot_init_eval_coh <- data_long %>%
+  # only use relevant variables
+  filter(item %in% rel_vars) %>%
+  # calculate mean per item, day, and cohort
+  group_by(item, day_num, cohort) %>%
+  summarize(daily_mean = mean(answer_id, na.rm = TRUE)) %>%
+  # additionally calculate the overall mean per item for the dotted lines below
+  group_by(item, cohort) %>%
+  mutate(item_mean = mean(daily_mean)) %>%
+  ungroup() %>%
+  # make sure day_num is numeric for plotting below
+  mutate(day_num = as.numeric(day_num)) %>%
+  ggplot(aes(
+    x = day_num,
+    y = daily_mean,
+    group = item,
+    color = item
+  )) +
+  # add indicator for mondays
+  # the vertical line will only be visible on mondays
+  geom_vline(aes(xintercept = monday_ind),
+             colour = "#F3F4F5",
+             data = day_ind) +
+  # add dotted lines for the overall item mean            
+  geom_line(aes(y = item_mean,
+                group = item, color = item),
+            lty = "dotted",
+            alpha = .75) +
+  # add lines for the daily means
+  geom_line() +
+  theme_warnd() +
+  scale_color_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  # proper y-scale
+  scale_y_continuous(limits = c(1, 7), breaks = 1:7) +
+  # Create separate facets for each cohort
+  facet_wrap(. ~ cohort,
+             # custom labelling for the Cohorts
+             labeller = as_labeller(c("1" = "Cohort 1",
+                                      "2" = "Cohort 2"))) +
+  # Add labels to the plot                                    
+  labs(
+    y = "Daily Mean",
+    x = "Day",
+    group = "Item",
+    color = "Item"
+  ) +
+  # Customize the theme
+  theme(
+    # Make item names in legend a bit smaller
+    legend.text = element_text(size = 9),
+    # remove default vertical gridlines
+    panel.grid.major.x = element_blank())
+
+# save as svg
+ggsave(
+  filename = "plot_init_eval12_coh_mock.svg",
+  plot_init_eval_coh,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 14,
+  height = 10,
+  units = c("cm")
+)
+
+
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/plot_init_eval12_coh_mock.svg"), error = FALSE)
+```
+
+# Recreating Figure 6: Autocorrelations of an Item
+
+As explained in the manuscript, we calculated the autocorrelation function (ACF) and the partial autocorrelation function (PACF) on detrended time series for certain items. Here, we show the autocorrelation function (ACF) for the item 'stressed'.
+
+We first use our custom `prep_acf` function, which takes a dataframe in a long format, detrends the item by removing a linear trend of time, and then calculates both the ACF and the PACF for a given item. We also pad the time series with missing values in the night to exclude overnight lags. See the main manuscript for more advanced techniques to estimate autocorrelations of certain items, for example via multilevel modelling. 
+
+```{r calc_autocorrelation, message=FALSE, results='hide'}
+# We mutate the responses to numeric values to make sure that they 
+# aren't coded as factors
+data_long <- data_long %>%
+  mutate(answer_id = as.numeric(answer_id))
+
+# Prepare the data and calculate the acf with our custom function
+df_acf_stressed <- prep_acf(data_long, "stressed")
+
+```
+
+The resulting `df_acf_stressed` consists of two sub-parts: 
+- `df_acf_stressed$df_acf` contains the estimated ACF 
+- `df_acf_stressed$df_pacf` contains the estimated PACF
+
+We can now create a plot of the autocorrelation function of the item:
+
+```{r plot-autocorrelation}
+# take the acf results
+plot_pacf <- df_acf_stressed$df_acf %>%
+  # lag 0 is meaningless for ACF of a single items
+  filter(lag > 0) %>%
+  # only plot acfs <1 in absolut value
+  filter(abs(acf) < 1) %>%
+  ungroup() %>%
+  # show first 9 lags for visual clarity
+  filter(lag < 10) %>%
+  # convert to factor for easier plotting with boxplots
+  mutate(lag = as.factor(lag)) %>%
+  ggplot(aes(
+    x = lag,
+    y = acf,
+    fill = lag,
+    color = lag
+  )) +
+  # all individual data points
+  # add jitter and low alpha to reduce overplotting
+  geom_point(
+    size = 1,
+    alpha = 0.1,
+    position = position_jitter(seed = 2022, width = .05)
+  ) +
+  # boxplot for aggregate summary
+  geom_boxplot(
+    # lighten the inside color
+    aes(fill = lag, fill = after_scale(colorspace::lighten(fill, .9))),
+    # make smaller and lighter color
+    width = .35,
+    alpha = .4,
+    # don't plot outliers, we already plot individual data points
+    outlier.shape = NA,
+    size = 1.15,
+    # changing visual output a little bit
+    lwd = 1,
+    fatten = 1.5
+  ) +
+  theme_warnd() +
+  theme(legend.position = "none") +
+  ggokabeito::scale_fill_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  scale_color_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  labs(x = "Lag",
+       y = "PACF")
+
+# save as svg
+ggsave(
+  filename = "plot_pacf_stressed_mock.svg",
+  plot_pacf,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 14,
+  height = 8,
+  units = c("cm")
+)
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/plot_pacf_stressed_mock.svg"), error = FALSE)
+```
+
+# Recreating Figure 7: Smoothed Development Over Time
+
+In this section, we plot the development of responses to the item 'depressed' over time. To do so, we create two plots with the same data:First, a plot showing the raw responses to the item over time, which is kind of hard to look at due to many data points. Second, a plot visualizing a gliding mean calculated in a sliding window over the time series.
+
+```{r plot-devel}
+# Find highly variable users which make for a good illustration
+slide_users_variable <- data_long %>%
+  # only use the evening depression question for illustration
+  filter(item == "depressed_e") %>%
+  # calculate person-specific standard deviation to find 
+  # individuals with highest variability
+  group_by(user_id) %>%
+  summarize(sd_dep = sd(answer_id, na.rm = TRUE)) %>%
+  # sort the users by their standard deviation (descending order)
+  arrange(desc(sd_dep)) %>%
+  # take the first six users (so those with the higest sd)
+  slice_head(n = 6) %>%
+  # extract their numerical user_id
+  pull(user_id)
+
+
+# Now plot their responses with a sliding window
+# using our custom function
+plot_slide_multiple <- sliding_multiple(
+  # only look at the last prompt of the day(which contains the evening survey)
+  data = data_long %>%
+    filter(prompt_num == 4),
+  # use users selected above
+  users = slide_users_variable,
+  # take the sliding mean
+  stat = "mean",
+  # average across 7 days
+  n_day = 7,
+  # only 1 beep per day
+  beeps = 1,
+  item = "depressed_e",
+  # select x and y axis values
+  ymin = 1,
+  ymax = 7,
+  xmin = 1,
+  xmax = 85,
+  # indicate if we want to label the time series (with the user_id) or not
+  end_label = FALSE
+) +
+  # add a continuous color 
+  colorspace::scale_color_continuous_sequential(
+  palette = "Viridis",
+  breaks = c(1.2, 1.6),
+  labels = c("low", "high")
+)
+
+
+# Do some additional styling for the manuscript plots
+plot_slide_multiple <- plot_slide_multiple +
+  # we add some better labels
+  labs(
+    title = "",
+    caption = "",
+    y = "7-Day Rolling Mean",
+    x = "",
+    col = "Variability"
+  ) +
+  # don't show alpha in the legend
+  guides(alpha = "none") +
+  # change text size a little bit
+  theme(
+    legend.key.size = unit(.9, "cm"),
+    legend.key.height = unit(.9, "cm"),
+    legend.key.width = unit(.9, "cm"),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+
+# Using the same function, we can also create a plot without a sliding window
+# aggregation
+plot_noslide_multiple <- sliding_multiple(
+  data = data_long %>%
+    filter(prompt_num == 4),
+  users = slide_users_variable,
+  stat = "mean",
+  # change to above: the mean is calculated in a 1-day window
+  # which means that there is no aggregation happening (as we have one response per day)
+  # the rest stays the same
+  n_day = 1,
+  beeps = 1,
+  item = "depressed_e",
+  ymin = 1,
+  ymax = 7,
+  xmin = 1,
+  xmax = 85,
+  end_label = TRUE
+) +
+  # add a continuous color 
+  colorspace::scale_color_continuous_sequential(
+  palette = "Viridis",
+  breaks = c(1.2, 1.6),
+  labels = c("low", "high")
+)
+
+# again add some nicer labels to the plot
+plot_noslide_multiple <- plot_noslide_multiple +
+  labs(
+    title = "",
+    caption = "",
+    subtitle = "Item: Depressed",
+    y = "Raw Scores",
+    x = "Day",
+    col = "Variability"
+  )
+
+
+# Combine with and without sliding plots into one
+# with a common legend 
+grid_slide <-
+  plot_grid(
+    # we first delete the individual legends here
+    plot_noslide_multiple  + theme(legend.position = "none"),
+    plot_slide_multiple + theme(legend.position = "none"),
+    nrow = 2,
+    labels = c("A", "B")
+  )
+# then we extract the legend from the first plot
+legend_slide <- get_legend(plot_slide_multiple)
+
+# Spacing of plots and legends
+# this is a little trick to choose the relative size of the plot and the legend
+# we first plot the combined figures, then have some whitespace (indicated by "NULL")
+# then we plot the legend
+grid_slide_leg <- plot_grid(grid_slide,
+                            NULL,
+                            legend_slide,
+                            rel_widths = c(3, .2, .33),
+                            nrow = 1)
+
+# save as svg
+ggsave(
+  filename = "grid_slide_mock.svg",
+  grid_slide_leg,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 22,
+  height = 15,
+  units = c("cm")
+)
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/grid_slide_mock.svg"), error = FALSE)
+```
+
+# Recreating Figure 8: Raw TS With Marginal Distribution
+
+To inspect time series of single individuals in detail, we have created a short plotting function here which plots time series of one or multiple items with their marginal distributions. A marginal distribution means that we are referring to the distribution of this single item, regardless of the values of any other variable. The custom-made function `plot_ts_side()` is available in the `aux_funs.R` file, alongside with explanations on how to use it. It takes as input the dataframe, a numerical id, and a character vector of items that should be plotted. The function can also be used to plot rolling means of time series. This is done by setting the argument `rolling = TRUE` and specifying the number of days to roll over with `rolling_days`. The argument `rolling_beep` specifies the number of beeps to roll over.
+
+We now plot two time series of an example participant:
+
+```{r plot-marginalts}
+# apply custom functions to plot items "stressed" and "sad"
+ggside_example <- plot_ts_side(data_long,
+                               id = "10",
+                               items = c("stressed", "sad"))
+
+# as the output is a ggplot object, we can again modify this with nicer labels
+ggside_example <- ggside_example +
+  labs(caption = "",
+       y = "Raw Scores",
+       x = "Beep")
+
+# save as svg       
+ggsave(
+  "ggside_example_mock.svg",
+  plot = ggside_example,
+  device = "svg",
+  path = here("figures/mock_figures/"),
+  width = 16,
+  height = 12,
+  units = c("cm")
+)
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/ggside_example_mock.svg"), error = FALSE)
+```
+
+# Recreating Figure 9: Variance Decomposition for an Item
+
+In this section, we create a variance decomposition plot as explained in the manuscript. We use lmer to fit a random-intercept model with multiple main effects and two-way interactions of the different nesting factors of our data, that is, of participant, day number, and prompt number. In such large data sets with multiple random effects/interactions, lmer often gives convergence warnings. In such cases (and even without such a warning), it is good practice to compare the results of different optimizers and/or optimizer settings. If the parameter values across models remain similar and make sense in a given context, one can be more confident in the results. In the full report, we obtain exactly this pattern.
+
+In the following code chunk, we show how to obtain estimates for the different variance components.
+
+```{r calc-variance-decomp, eval = FALSE}
+vardecomp_ids <- data_long %>%
+  # only look at responses for item stressed
+  filter(item == "stressed") %>%
+  # remove all missing observations
+  filter(!is.na(answer_id)) %>%
+  # count the number of observations for each users
+  count(user_id) %>%
+  # arrange users in descending order of observations
+  arrange(desc(n)) %>%
+  # use 200 individuals with most data
+  slice_head(n = 200) %>%
+  # extract the user ids so that we can filter them below
+  pull(user_id)
+
+# Filter data to include the selected users
+data_vardecomp <- data_long %>%
+  filter(user_id %in% vardecomp_ids)
+
+
+data_vardecomp <- data_vardecomp %>%
+  mutate(across(c(user_id, day_num, prompt_num),
+                ~ as.factor(.)))
+
+# Fit a random-effects model with all interactions
+decomp_formula <- formula(
+  answer_id ~ 1 +
+    # main effects
+    (1 | user_id) +
+    (1 | day_num) +
+    (1 | prompt_num) +
+    # 2-way interactions
+    (1 | user_id:day_num) +
+    (1 | user_id:prompt_num) +
+    (1 | day_num:prompt_num)
+)
+# Fit the random-effects model using restricted maximum likelihood estimation
+decompose_fit <- lmerTest::lmer(formula = decomp_formula,
+                                data = data_vardecomp,
+                                REML = TRUE)
+
+# Save the results
+saveRDS(decompose_fit, here("output/decompose_fit_mock.RDS"))
+
+```
+
+As the execution of the code chunk above might take some time, we don't run it when knitting this document, but rather load some example results below:
+
+```{r}
+decompose_fit <- readRDS(here("output/decompose_fit_mock.RDS"))
+```
+
+We can now create the tile plot shown in the manuscript. We first use a function by Schönbrodt and colleagues (2022) to extract the relative proportions of different variance components from the lmer output. We then create a tile plot which illustrates these components in a visually appealing way.
+
+```{r plot-variance-decomp}
+# Use a function obtained from Schönbrodt et al. (see documentation)
+decomp_percentages <-
+  as.data.frame(varDecomp1(
+    decompose_fit,
+    include_error = TRUE,
+    relative = TRUE,
+    add_overall = FALSE
+  ))
+
+# proper naming for ggplot by moving rownames (indicating the variance components)
+# to their own column
+decomp_percentages <- decomp_percentages %>%
+  tibble::rownames_to_column(var = "term")
+
+# proper naming
+colnames(decomp_percentages) <- c("term", "percentage")
+
+
+# create the tile plot
+plot_decomp <-
+  decomp_percentages %>%
+  # proper names for the variance components
+  mutate(
+    term = gsub("day_num", "Day", term),
+    term = gsub("user_id", "Person", term),
+    term = gsub("prompt_num", "Beep", term),
+    term = gsub("Error", "Residual", term)
+  ) %>%
+  mutate(term = as.factor(term)) %>%
+  # reorder them by frequency such that largest term comes first
+  mutate(term = forcats::fct_reorder(term, desc(percentage))) %>%
+  ggplot(aes(area = percentage,
+             fill = term,
+             label = term)) +
+  # This function creates the treemap/tilde plot
+  treemapify::geom_treemap() +
+  scale_fill_okabe_ito(order = c(5, 1, 3, 4, 2, 6, 7, 8, 9)) +
+  # center text inside the tiles
+  geom_treemap_text(size = 14, place = "centre") +
+  theme_warnd() +
+  # shift legend to the right
+  theme(legend.position = "right",
+        legend.title = element_text(face = "plain")) +
+  labs(title = "",
+       fill = "Term",
+       label = "Term")
+
+# save as svg
+ggsave(
+  "plot_decomp_mock.svg",
+  plot_decomp,
+  device = "svg",
+  path = here::here("figures/mock_figures/"),
+  height = 5,
+  width = 7
+)
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/plot_decomp_mock.svg"), error = FALSE)
+```
+
+In this case, the tile plot is not informative, as we only have residual noise in our simulated data. See the main manuscript for a more informative and realistic plot. 
+
+# Recreating Figure 10: Correlation of EMA With Baseline {#fig10}
+
+We now show how to calculate and visualize associations of EMA summaries to baseline data. For example, we can visualize how the person-specific means of EMA items are correlated with sum scores of different baseline questionnaires. 
+
+We first need to calculate some person-specific EMA summaries, and then merge these with the baseline data:
+
+```{r prep-cor-baseline}
+df_desc <- data_long %>%
+  # create grouped summaries
+  group_by(user_id, item) %>%
+  filter(item %in% rel_lik_vars) %>%
+  # create basic summary stats also shown in the manuscript
+  # we only look at the mean below
+  summarize(
+    ema_mean = mean(answer_id, na.rm = TRUE),
+    ema_med = median(answer_id, na.rm = TRUE),
+    ema_sd = sd(answer_id, na.rm = TRUE),
+    ema_skew = moments::skewness(answer_id, na.rm = TRUE),
+    ema_rmssd = psych::rmssd(answer_id, na.rm = TRUE)
+  ) %>%
+  # pivot wider such that each item summary is in its own column
+  pivot_wider(
+    names_from = "item",
+    values_from =
+      c(ema_mean, ema_med, ema_sd, ema_skew, ema_rmssd)
+  ) %>%
+  ungroup()
+
+# join baseline with EMA data
+# this takes the dataframe with descriptives (df_desc)
+# and ensures that its column "user_id" is numeric
+# we then merge df_desc to data_baseline by matching user_id
+base_ema <- data_baseline %>%
+  left_join(df_desc %>% mutate(user_id = as.numeric(user_id)), by = "user_id")
+
+```
+
+We now create a correlation table and then visualize it. This reproduces Figure 8 in the manuscript.
+
+```{r plot-cor-baseline}
+# These are all relevant variables, which we arranged manually
+arrange_vars <-
+  c(
+    "relaxed",
+    "outlook",
+    "motivated",
+    "cheerful",
+    "useful",
+    "coping",
+    "connected",
+    "concentrate",
+    "tired",
+    "stressed",
+    "sad",
+    "overwhelmed",
+    "nervous",
+    "ruminate",
+    "emo_reg",
+    "depressed",
+    "irritable",
+    "anhedonia"
+  )
+
+# take the combined dataframe of EMA summaries and baseline data
+cor_plot <- base_ema %>%
+  # select EMA items and the cross-sectional items
+  select(starts_with("ema_"),
+         gad_sum,
+         pss_10_sum,
+         pseudo_phq9_sum,
+         scoff_tot,
+         asrm_tot) %>%
+  # use pairwise complete observations and estimate correlations
+  cor(use = "pairwise.complete.obs") %>%
+  as.data.frame() %>%
+  # add names of EMA variables as own column
+  tibble::rownames_to_column(var = "ema_var") %>%
+  # only keep the ema items in the ema_var column to create the plot
+  filter(grepl("ema", ema_var)) %>%
+  # only select the mean - could also look at the other summaries here
+  filter(grepl("mean", ema_var)) %>%
+  # select only the ema_var column, and all baseline columns here
+  select(!contains("ema"), ema_var) %>%
+  # pivot longer for proper plotting
+  pivot_longer(cols = !ema_var,
+               values_to = "cor",
+               names_to = "variable") %>%
+  # nicer naming of baseline variables
+  mutate(
+    variable = case_match(
+      variable,
+      "gad_sum" ~ "GAD-7",
+      "pss_10_sum" ~ "PSS-10",
+      "pseudo_phq9_sum" ~ "PHQ-9",
+      "scoff_tot" ~ "SCOFF",
+      "asrm_tot" ~ "ASRM"
+    )
+  ) %>%
+  # order such that PHQ-9 comes first, followed by GAD-7, PSS-10, SCOFF, ASRM
+  dplyr::mutate(variable = factor(variable,
+                                  levels = c(
+                                    "PHQ-9", "GAD-7", "PSS-10", "SCOFF", "ASRM"
+                                  ))) %>%
+  # better naming of EMA variables
+  dplyr::mutate(
+    ema_var = gsub("_e$", "", ema_var),
+    ema_var = gsub("connect", "connected", ema_var),
+    ema_var = gsub("concentr", "concentrate", ema_var),
+    ema_var = gsub("overwhelm", "overwhelmed", ema_var)
+  ) %>%
+  # remove redundant string
+  dplyr::mutate(ema_var = gsub("ema_mean_", "", ema_var)) %>%
+  # arrange by order of EMA variables
+  dplyr::mutate(ema_var = factor(ema_var, levels = arrange_vars)) %>%
+  ggplot(aes(y = ema_var,
+             x = variable,
+             fill = cor)) +
+  # tiles for correlation matrix
+  geom_tile() +
+  # add correlation as text inside the tile
+  geom_text(aes(label = round(cor, 2))) +
+  # diverging color scale for correlations
+  scale_fill_continuous_diverging() +
+  # move x-scale to different position
+  scale_x_discrete(position = "top",
+                   expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  theme_warnd() +
+  # rotate axis text
+  theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  ),
+  legend.position = "none") +
+  labs(x = "Baseline\n",
+       y = "EMA\n")
+
+# save as svg
+ggsave(
+  "cor_plot_ema_baseline_mock.svg",
+  cor_plot,
+  device = "svg",
+  path = here::here("figures/mock_figures/"),
+  height = 7
+)
+```
+
+```{r, echo = FALSE}
+knitr::include_graphics(here("figures/mock_figures/cor_plot_ema_baseline_mock.svg"), error = FALSE)
+```
+

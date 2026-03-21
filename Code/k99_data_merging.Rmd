@@ -1,0 +1,98 @@
+---
+title: "k99_data_merging"
+author: "Gavin Kelly"
+date: "2025-06-06"
+output: html_document
+---
+
+This is a data processing script for merging the k99 baseline, survey, and choicetask data.
+
+I first merge the survey and choicetask data by subject and session. (line 41)
+
+I then merge this with the baseline data by subject. (line 56)
+
+Then i merge this with the ddm results by subject and session. (line 64)
+
+I then save the csv. (line 72)
+
+I also create an save a csv for data sharing, excluding identifiable variables (line 101).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/gavin/OneDrive - andrew.cmu.edu/Documents/RADLab")
+```
+  
+  analysis vs synthetic data variables (vars have different names)
+  
+  Only in analysis:
+    session
+    specific event types and social contexts
+    NA and PA state
+    emotion change variables (predictive and retrospective)
+    soft yday, today, intend, craving
+    alc exp and mot overall
+    date and time
+    response, rt, rt_fast_prop
+    day of week
+    sex, student, education, employment, age
+    baseline date and scale scores
+    race gender sexuality nondectime
+
+  Only in synthetic:
+    none
+    
+  do we want weekend?
+    
+
+## Loading Data
+
+```{r}
+baseline_data_processed <- read.csv("baseline_data_processed.csv")
+survey_data_processed <- read.csv("survey_data_processed.csv")
+choicetask_data_processed <- read.csv("choicetask_data_processed.csv")
+ddm_results_data <- read.csv("ddm_results.csv")
+```
+
+We can remove unnecessary columns from the ddm results data.
+
+```{r}
+ddm_results_data$negative_log_likelihood <- NULL
+ddm_results_data$hit_boundary <- NULL
+ddm_results_data$hit_boundary2 <- NULL
+ddm_results_data$repr <- NULL
+```
+
+First we need to merge the survey and choice task data by "subject" and "session".
+
+```{r}
+survey_choicetask_merged_data <- left_join(survey_data_processed, choicetask_data_processed, by = c("subject", "session"))
+```
+
+```{r}
+s_ct_ddm_merged_data <- left_join(survey_choicetask_merged_data, ddm_results_data, by = c("subject", "session"))
+```
+
+Now we can take this data frame and merge it with the baseline data by "subject".
+
+```{r}
+k99_merged_data <- left_join(s_ct_ddm_merged_data, baseline_data_processed, by = "subject")
+```
+
+Now we will edit the data file to make it appropriate for sharing, removing private info.
+
+```{r}
+k99_shared_data <- k99_merged_data[,!names(k99_merged_data) %in% c("alc_exp_none", "alc_mot_none", "race_hispanic_latino", "race_east_asian", "race_southeast_asian", "race_pacific_islander", "race_south_asian", "race_american_indian", "race_african_american", "race_african", "race_middle_eastern", "race_white", "race_other", "race_no_response", "gender_woman", "gender_man", "gender_trans_woman", "gender_trans_man", "gender_queer", "gender_agender", "gender_fluid",
+"gender_intersex", "gender_non_binary","gender_other", "gender_no_response", "sexuality_lesbian", "sexuality_gay", "sexuality_bisexual", "sexuality_queer", "sexuality_two_spirit", "sexuality_straight", "sexuality_pansexual", "sexuality_asexual", "sexuality_no_response")]
+```
+
+
+```{r}
+write.csv(k99_shared_data, "k99_shared_data.csv", row.names = F)
+```
+
+
+
+
+
+
+
