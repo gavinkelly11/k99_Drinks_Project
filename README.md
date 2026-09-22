@@ -9,17 +9,17 @@ The data processing workflow is divided into modular `.Rmd` scripts, executing i
 
 ### 1. Data Cleaning & Level Processing
 These scripts process the raw data at three distinct observational levels:
-*   `k99_baseline_data.Rmd` — Cleans and standardizes participant-level baseline demographic and trait data[cite: 1].
-*   `k99_survey_data.Rmd` — Processes the EMA survey responses, handling timestamp alignments and contextual environmental variables[cite: 1].
-*   `k99_choicetask_data.Rmd` — Cleans the high-volume experimental choice task data (~950,000 observations)[cite: 1].
+*   `k99_baseline_data.Rmd` — Cleans and standardizes participant-level baseline demographic and trait data.
+*   `k99_survey_data.Rmd` — Processes the EMA survey responses, handling timestamp alignments and contextual environmental variables.
+*   `k99_choicetask_data.Rmd` — Cleans the high-volume experimental choice task data (~950,000 observations).
 
 ### 2. Merging & Preparation
-*   `k99_data_merging.Rmd` — Merges the baseline, survey, and choice-task data into a single, cohesive relational dataset[cite: 1].
-*   `k99_analysis_data.Rmd` — Finalizes data preparation, including any final variable transformations or factor coding required for the statistical modeling phase[cite: 1].
+*   `k99_data_merging.Rmd` — Merges the baseline, survey, and choice-task data into a single, cohesive relational dataset.
+*   `k99_analysis_data.Rmd` — Finalizes data preparation, including any final variable transformations or factor coding required for the statistical modeling phase.
 
 ### 3. Exploration & Visualizations
-*   `k99_descriptive_statistics.Rmd` — Extracts quantitative summary statistics for baseline demographics and contextual variables[cite: 1].
-*   `k99_data_plots.Rmd` — Generates data visualizations mapping preference shifts and choice distributions[cite: 1].
+*   `k99_descriptive_statistics.Rmd` — Extracts quantitative summary statistics for baseline demographics and contextual variables.
+*   `k99_data_plots.Rmd` — Generates data visualizations mapping preference shifts and choice distributions.
 
 ## Tech Stack
 *   **Language:** R
